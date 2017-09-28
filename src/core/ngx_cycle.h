@@ -36,7 +36,7 @@ struct ngx_shm_zone_s {
 
 
 struct ngx_cycle_s {
-    void                  ****conf_ctx;
+    void                  ****conf_ctx; /* 配置存储结构 */
     ngx_pool_t               *pool;
 
     ngx_log_t                *log;

@@ -26,6 +26,11 @@
     ngx_align((sizeof(ngx_pool_t) + 2 * sizeof(ngx_pool_large_t)),            \
               NGX_POOL_ALIGNMENT)
 
+/* 名词定义:
+ * 内存块: 一个 ngx_pool_data_t 即 一个内存块
+ * 大块内存: 链表 ngx_pool_large_t 的一个节点 就是 一个大块内存
+ * 内存池: 即ngx_pool_t, 他管理内存块 和 大块内存
+ */
 
 typedef void (*ngx_pool_cleanup_pt)(void *data);
 
@@ -45,23 +50,27 @@ struct ngx_pool_large_s {
     void                 *alloc;
 };
 
-
+/* 内存块结构
+ *
+ */
 typedef struct {
-    u_char               *last;
-    u_char               *end;
-    ngx_pool_t           *next;
-    ngx_uint_t            failed;
+    u_char               *last;  //当前内存块分配到此处，即下一次分配从此处开始  
+    u_char               *end;   //内存块结束位置
+    ngx_pool_t           *next;  //指向下一个内存池
+    ngx_uint_t            failed;//内存块分配失败次数
 } ngx_pool_data_t;
 
-
+/* 内存池结构(内存块管理结构)
+ * 优点: 一个过程申请的内存都统一维护,减少了malloc的调用;过程结束后统一释放,规避内存泄露,减少开发者工作量
+ */
 struct ngx_pool_s {
-    ngx_pool_data_t       d;
-    size_t                max;
-    ngx_pool_t           *current;
-    ngx_chain_t          *chain;
-    ngx_pool_large_t     *large;
-    ngx_pool_cleanup_t   *cleanup;
-    ngx_log_t            *log;
+    ngx_pool_data_t       d;      //内存块的数据块
+    size_t                max;    //内存块最大长度;申请大于这个长度的内存时,就malloc一块内存放到large链表中 
+    ngx_pool_t           *current;//指向当前正在使用内存快
+    ngx_chain_t          *chain;  //该指针挂接一个ngx_chain_t结构
+    ngx_pool_large_t     *large;  //大块内存链表，即分配空间超过max的内存
+    ngx_pool_cleanup_t   *cleanup;//释放内存池的callback
+    ngx_log_t            *log;    //日志信息
 };
 
 

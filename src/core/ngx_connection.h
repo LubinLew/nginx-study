@@ -16,18 +16,18 @@
 typedef struct ngx_listening_s  ngx_listening_t;
 
 struct ngx_listening_s {
-    ngx_socket_t        fd;
+    ngx_socket_t        fd; //socket套接字句柄
 
-    struct sockaddr    *sockaddr;
+    struct sockaddr    *sockaddr; //监听地址
     socklen_t           socklen;    /* size of sockaddr */
-    size_t              addr_text_max_len;
-    ngx_str_t           addr_text;
+    size_t              addr_text_max_len; //?
+    ngx_str_t           addr_text; //IP地址的字符串形式
 
-    int                 type;
+    int                 type; //套接字类型 eg SOCK_STREAM
 
-    int                 backlog;
-    int                 rcvbuf;
-    int                 sndbuf;
+    int                 backlog; //TCP监听时的backlog队列, 表示允许正在通过过上次握手建立TCP连接但是还没有任何进程处理的连接的最大个数
+    int                 rcvbuf;  //内核中对这个套接字的接收缓冲区大小
+    int                 sndbuf;  //内核中对这个套接字的发送缓冲区大小
 #if (NGX_HAVE_KEEPALIVE_TUNABLE)
     int                 keepidle;
     int                 keepintvl;
@@ -35,14 +35,14 @@ struct ngx_listening_s {
 #endif
 
     /* handler of accepted connection */
-    ngx_connection_handler_pt   handler;
-
+    ngx_connection_handler_pt   handler; //当新的TCP连接建立成功后的处理方法. eg ngx_http_init_connection
+	/* 框架本身并不使用,主要时http或者mail模块 用来保存当前监听端口对应着的所有主机名   */
     void               *servers;  /* array of ngx_http_in_addr_t, for example */
 
     ngx_log_t           log;
     ngx_log_t          *logp;
 
-    size_t              pool_size;
+    size_t              pool_size; //新的TCP连接创建的内存池初始化大小
     /* should be here because of the AcceptEx() preread */
     size_t              post_accept_buffer_size;
     /* should be here because of the deferred accept */

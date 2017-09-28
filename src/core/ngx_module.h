@@ -218,7 +218,9 @@
 
 #define NGX_MODULE_V1_PADDING  0, 0, 0, 0, 0, 0, 0, 0
 
-
+/* 模块通用接口
+ *
+ */
 struct ngx_module_s {
     ngx_uint_t            ctx_index;
     ngx_uint_t            index;
@@ -233,15 +235,15 @@ struct ngx_module_s {
 
     void                 *ctx;
     ngx_command_t        *commands;
-    ngx_uint_t            type;
+    ngx_uint_t            type; //模块类型 eg NGX_CONF_MODULE/NGX_CORE_MODULE/NGX_EVENT_MODULE/NGX_HTTP_MODULE/NGX_MAIL_MODULE
 
-    ngx_int_t           (*init_master)(ngx_log_t *log);
+    ngx_int_t           (*init_master)(ngx_log_t *log);       //unused
 
     ngx_int_t           (*init_module)(ngx_cycle_t *cycle);
 
     ngx_int_t           (*init_process)(ngx_cycle_t *cycle);
-    ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);
-    void                (*exit_thread)(ngx_cycle_t *cycle);
+    ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);   //unused
+    void                (*exit_thread)(ngx_cycle_t *cycle);   //unused
     void                (*exit_process)(ngx_cycle_t *cycle);
 
     void                (*exit_master)(ngx_cycle_t *cycle);
@@ -258,8 +260,10 @@ struct ngx_module_s {
 
 
 typedef struct {
-    ngx_str_t             name;
+    ngx_str_t             name; //核心模块名称
+    //解析配置文件前,nginx框架会调用 create_conf 方法来创建存储配置项的数据结构
     void               *(*create_conf)(ngx_cycle_t *cycle);
+	//解析配置文件后, nginx框架会调用 init_conf 方法,使用解析好的配置数据来初始化核心模块的功能
     char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);
 } ngx_core_module_t;
 

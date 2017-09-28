@@ -118,7 +118,9 @@ ngx_reset_pool(ngx_pool_t *pool)
     pool->large = NULL;
 }
 
-
+/* 从pool中申请内存
+ * 
+*/
 void *
 ngx_palloc(ngx_pool_t *pool, size_t size)
 {
@@ -170,6 +172,7 @@ ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
 
     } while (p);
 
+	//既存的pool中无法申请size大小的内存, 重新申请一个pool
     return ngx_palloc_block(pool, size);
 }
 
@@ -198,12 +201,14 @@ ngx_palloc_block(ngx_pool_t *pool, size_t size)
     m = ngx_align_ptr(m, NGX_ALIGNMENT);
     new->d.last = m + size;
 
+	//遍历所有内存快
     for (p = pool->current; p->d.next; p = p->d.next) {
         if (p->d.failed++ > 4) {
             pool->current = p->d.next;
         }
     }
 
+	//新申请的 ngx_pool_t 放到链表末尾
     p->d.next = new;
 
     return m;

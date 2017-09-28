@@ -88,7 +88,9 @@ typedef struct {
     ngx_array_t      *dns_wc_tail_hash;
 } ngx_hash_keys_arrays_t;
 
-
+/* ngx_table_elt_t是为HTTP头部量身订制的 
+ *
+ */
 typedef struct {
     ngx_uint_t        hash;
     ngx_str_t         key;

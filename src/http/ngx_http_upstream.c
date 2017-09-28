@@ -2757,6 +2757,7 @@ ngx_http_upstream_process_body_in_memory(ngx_http_request_t *r,
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
                    "http upstream process body on memory");
 
+	/* 检测接收上游服务器的响应是否超时 */
     if (rev->timedout) {
         ngx_connection_error(c, NGX_ETIMEDOUT, "upstream timed out");
         ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
@@ -2766,7 +2767,7 @@ ngx_http_upstream_process_body_in_memory(ngx_http_request_t *r,
     b = &u->buffer;
 
     for ( ;; ) {
-
+		/* 计算buf剩余空间大小 */
         size = b->end - b->last;
 
         if (size == 0) {
@@ -2776,17 +2777,29 @@ ngx_http_upstream_process_body_in_memory(ngx_http_request_t *r,
             return;
         }
 
+		/* 接收上游服务器响应,存入到buf中 */
         n = c->recv(c, b->last, size);
 
+		/* recv 返回 EAGAIN/EWOULDBLOCK 或者 EINTR 时
+		* EAGAIN/EWOULDBLOCK : 非阻塞socket无数据可读,或者设置了接收超时并且发生了超时.
+			PS:EAGAIN和EWOULDBLOCK是同一个含义,区别是在不同的系统上,例如VxWorks使用EWOULDBLOCK,
+			  通常为了程序的可移植性,同时判断这两个值.
+ 		* EINTR : 在未接收到任何数据前,操作被信号打断
+		*/
         if (n == NGX_AGAIN) {
             break;
         }
 
+		/* recv 返回 0 / -1
+		 * 返回0 : 对端关闭连接,通常是对方发了FIN包,所以不含响应数据
+		 * 返回-1: recv出错
+		*/
         if (n == 0 || n == NGX_ERROR) {
             ngx_http_upstream_finalize_request(r, u, n);
             return;
         }
 
+		/* 本次从上游服务器读取到n个字节的响应 */
         u->state->bytes_received += n;
         u->state->response_length += n;
 
@@ -2795,6 +2808,7 @@ ngx_http_upstream_process_body_in_memory(ngx_http_request_t *r,
             return;
         }
 
+		/* 检测是否还有tcp数据可读取 */
         if (!rev->ready) {
             break;
         }
@@ -2805,11 +2819,13 @@ ngx_http_upstream_process_body_in_memory(ngx_http_request_t *r,
         return;
     }
 
+	/* 将读事件加入epoll */
     if (ngx_handle_read_event(rev, 0) != NGX_OK) {
         ngx_http_upstream_finalize_request(r, u, NGX_ERROR);
         return;
     }
 
+	/* 将读事件加入timer */
     if (rev->active) {
         ngx_add_timer(rev, u->conf->read_timeout);
 
