@@ -1222,6 +1222,7 @@ ngx_http_upstream_handler(ngx_event_t *ev)
     ngx_http_request_t   *r;
     ngx_http_upstream_t  *u;
 
+	/* 获取nginx与上游服务器的连接 */
     c = ev->data;
     r = c->data;
 
@@ -1238,10 +1239,10 @@ ngx_http_upstream_handler(ngx_event_t *ev)
         ev->timedout = 0;
     }
 
-    if (ev->write) {
+    if (ev->write) {/* nginx与上游服务器间TCP连接的可写事件触发 */
         u->write_event_handler(r, u);
 
-    } else {
+    } else {/* nginx与上游服务器间TCP连接的可读事件触发 */
         u->read_event_handler(r, u);
     }
 
