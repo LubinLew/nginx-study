@@ -357,11 +357,25 @@ struct ngx_http_upstream_s {
     ngx_buf_t                        buffer;
     off_t                            length;//上游服务器的响应体的长度
 
+	/* out_bufs 在两种情况下有不同的意义:
+	 * 1)当不需要转发包体,且使用默认的input_filter方法(即ngx_http_upstream_non_buffered_filter)处理包体时,
+	 *   out_bufs将会指向响应体,事实上out_bufs链表中会产生多个ngx_buf_t缓冲区,每个缓冲区都指向buffer缓存中的一部分,
+	 *   而这里的一部分就是每次调用recv方法接收到的一段TCP流
+	 * 2)当需要转发响应体到下游时(buffering = 0,即以下游网速优先),这个链表指向上一次向下游转发响应到现在这段时间内接收上游的缓存响应
+	 */
     ngx_chain_t                     *out_bufs;
+	/* 当需要转发响应包体到下游时(buffering = 0),它表示上一次向下游转发响应时没有发送完的内容 */
     ngx_chain_t                     *busy_bufs;
+	/* 当需要转发响应包体到下游时(buffering = 0),这个链表将用于回收out_bufs中已经发送给下游的ngx_buf_t结构体 */
     ngx_chain_t                     *free_bufs;
 
+	/* 处理包体前的初始化函数,   data参数既是下面的 input_filter_ctx    */
     ngx_int_t                      (*input_filter_init)(void *data);
+	/* 处理响应体的函数, 
+	 *  1)data参数用于传递用户数据结构,即是下面的 input_filter_ctx,
+	 *  2)bytes参数表示本次接收到的数据长度 
+	 * 返回NGX_ERROR时表示处理出错,请求结束, 否则继续upstream流程 
+	 */
     ngx_int_t                      (*input_filter)(void *data, ssize_t bytes);
     void                            *input_filter_ctx;
 
@@ -370,6 +384,7 @@ struct ngx_http_upstream_s {
 #endif
     //构造发往上游服务器的请求内容,主要就是为成员 request_bufs 赋值
     ngx_int_t                      (*create_request)(ngx_http_request_t *r);
+    /* 与上游服务器通信失败后,如果按照重试规则还需要再次向上游服务器发起连接,则会调用 reinit_request 方法 */
     ngx_int_t                      (*reinit_request)(ngx_http_request_t *r);
 
 	/* 收到上游服务器响应时的回调,可能会被多次调用,直到接收完整的响应头后才不会被调用,
@@ -382,15 +397,18 @@ struct ngx_http_upstream_s {
 	//销毁upstream请求时调用
     void                           (*finalize_request)(ngx_http_request_t *r,
                                          ngx_int_t rc);
+	/* 在上游服务器返回的响应中出现Location或者Refresh头部表示重定向时,
+	 * 会通过 ngx_http_upstream_process_headers方法调用到可由HTTP模块实现的 rewrite_redirect 方法
+	 */
     ngx_int_t                      (*rewrite_redirect)(ngx_http_request_t *r,
                                          ngx_table_elt_t *h, size_t prefix);
     ngx_int_t                      (*rewrite_cookie)(ngx_http_request_t *r,
                                          ngx_table_elt_t *h);
 
     ngx_msec_t                       timeout;
-
+    //用于表示上游服务器响应的 错误码/包体长度 等信息
     ngx_http_upstream_state_t       *state;
-
+    //不使用文件缓存时没有意义
     ngx_str_t                        method;
 	//下面2个成员用于记录日志
     ngx_str_t                        schema;
@@ -401,8 +419,9 @@ struct ngx_http_upstream_s {
 #endif
 
     ngx_http_cleanup_pt             *cleanup;
-
+    /* 是否指定文件缓存路径的标志位 */
     unsigned                         store:1;
+	/* 是否启用文件缓存的标志位 */
     unsigned                         cacheable:1;
     unsigned                         accel:1;
 	//是否基于ssl协议访问上游服务器
@@ -419,6 +438,8 @@ struct ngx_http_upstream_s {
     unsigned                         keepalive:1;
     unsigned                         upgrade:1;
 
+	/* 该标志位表示是否向上游服务器发送了请求 
+	*/
     unsigned                         request_sent:1;
     unsigned                         request_body_sent:1;
     unsigned                         header_sent:1;

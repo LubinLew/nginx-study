@@ -179,7 +179,10 @@ ngx_chain_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
     return cl;
 }
 
-
+/* 更新 out_bufs busy_bufs free_bufs 
+ * 1)将out_bufs中已经发送出去的ngx_buf_t从链表中拿出来放到free_bufs链表中
+ * 2)将out_bufs中未发送完的ngx_buf_t从链表中拿出来放到busy_bufs链表中
+ */
 void
 ngx_chain_update_chains(ngx_pool_t *p, ngx_chain_t **free, ngx_chain_t **busy,
     ngx_chain_t **out, ngx_buf_tag_t tag)

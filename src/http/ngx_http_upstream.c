@@ -513,6 +513,7 @@ ngx_http_upstream_init(ngx_http_request_t *r)
     }
 #endif
 
+    /* 将客户端连接的读事件从定时器中删除 */
     if (c->read->timer_set) {
         ngx_del_timer(c->read);
     }
@@ -606,6 +607,7 @@ ngx_http_upstream_init_request(ngx_http_request_t *r)
         u->request_bufs = r->request_body->bufs;
     }
 
+    /* 调用create_request方法,构造发往向上游服务器请求 */
     if (u->create_request(r) != NGX_OK) {
         ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
         return;
@@ -787,6 +789,7 @@ found:
         u->peer.tries = u->conf->next_upstream_tries;
     }
 
+    /* 连接上游服务器 */
     ngx_http_upstream_connect(r, u);
 }
 
@@ -3651,7 +3654,7 @@ ngx_http_upstream_non_buffered_filter_init(void *data)
     return NGX_OK;
 }
 
-
+/* 默认的 input_filter 方法 */
 static ngx_int_t
 ngx_http_upstream_non_buffered_filter(void *data, ssize_t bytes)
 {
@@ -3663,31 +3666,50 @@ ngx_http_upstream_non_buffered_filter(void *data, ssize_t bytes)
 
     u = r->upstream;
 
+	/* 找到out_bufs链表的末尾, 其中cl指向链表中最后一个ngx_chain_t元素的next成员,
+	 * 所以cl最后一定是一个NULL空指针, 而ll指向最后一个缓冲区的地址,
+     * 它用来在后面的代码中向out_bufs链表添加新的缓冲区
+	 */
     for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) {
         ll = &cl->next;
     }
 
+    /* free_bufs指向空闲的ngx_buf_t结构体构成的链表,  
+     * 1)如果free_bufs此时是空的,则会从r->pool中分配一个ngx_buf_t给cl,
+     * 2)如果frre_bufs链表不为空,那么直接从free_bufs中获取一个ngx_buf_t给cl
+     */
     cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs);
     if (cl == NULL) {
         return NGX_ERROR;
     }
 
+    /* 将新分配的ngx_buf_t添加到out_bufs链表的末尾 */
     *ll = cl;
 
     cl->buf->flush = 1;
     cl->buf->memory = 1;
 
+	/* 本次接收的数据已经保存在u->buffer中, 数据拷贝的过程是在别的函数中做的,
+	 * 例如 ngx_http_upstream_process_body_in_memory 中直接用u->buffer接收socket数据,
+	 * 接下来要做的只是更新一下u->buffer的指针位置
+	 */
     b = &u->buffer;
 
+    /* 本次接收到数据从b->last开始 到     b->last+bytes 结束,
+     * 1)更新 u->buffer 指针位置
+     * 2)更新 cl, ngx_chain_update_chains
+     */
     cl->buf->pos = b->last;
     b->last += bytes;
     cl->buf->last = b->last;
     cl->buf->tag = u->output.tag;
 
+	/* 如果没有设置包体长度,      那么到此结束 */
     if (u->length == -1) {
         return NGX_OK;
     }
 
+    /* 更新length,需要接收的包体长度减少bytes字节 */
     u->length -= bytes;
 
     return NGX_OK;
