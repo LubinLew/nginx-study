@@ -117,32 +117,36 @@ typedef enum {
 #define NGX_SSL_BUFFERED       0x01
 #define NGX_HTTP_V2_BUFFERED   0x02
 
-
+/* 服务器的被动连接(TCP连接) */
 struct ngx_connection_s {
     void               *data;
-    ngx_event_t        *read;
-    ngx_event_t        *write;
+    ngx_event_t        *read;  /* 该连接对应的读事件 */
+    ngx_event_t        *write; /* 该连接对应的写事件 */
 
-    ngx_socket_t        fd;
+    ngx_socket_t        fd;    /* 套接字句柄 */
 
-    ngx_recv_pt         recv;
-    ngx_send_pt         send;
-    ngx_recv_chain_pt   recv_chain;
-    ngx_send_chain_pt   send_chain;
+    ngx_recv_pt         recv;  /* 接收TCP数据的方法 */
+    ngx_send_pt         send;  /* 发送TCP数据的方法    */
+    ngx_recv_chain_pt   recv_chain; /* 以ngx_chain_t链表为参数,接收TCP数据的方法 */
+    ngx_send_chain_pt   send_chain; /* 以ngx_chain_t链表为参数,发送TCP数据的方法 */
 
     ngx_listening_t    *listening;
 
-    off_t               sent;
+    off_t               sent;  /* 这个连接已经发送出去的字节数 */
 
     ngx_log_t          *log;
 
-    ngx_pool_t         *pool;
+     /* 在accept一个新连接的时候,会创建一个内存池,而这个连接结束时候,会销毁这个内存池.  
+      * 这里所说的连接是成功建立的tcp连接.内存池的大小由pool_size决定  
+      * 所有的ngx_connect_t结构体都是预分配的  
+      */
+     ngx_pool_t         *pool;
 
     int                 type;
 
-    struct sockaddr    *sockaddr;
-    socklen_t           socklen;
-    ngx_str_t           addr_text;
+    struct sockaddr    *sockaddr; /* 客户端的socket地址 */
+    socklen_t           socklen;  /* 客户端的socket地址长度 */
+    ngx_str_t           addr_text;/* 客户端的ip(字符串形式) */
 
     ngx_str_t           proxy_protocol_addr;
     in_port_t           proxy_protocol_port;
@@ -150,34 +154,39 @@ struct ngx_connection_s {
 #if (NGX_SSL || NGX_COMPAT)
     ngx_ssl_connection_t  *ssl;
 #endif
-
+    /* 本机中监听端口对应的socketaddr结构体, 也就是listen监听对象中的socketaddr成员 */
     struct sockaddr    *local_sockaddr;
     socklen_t           local_socklen;
 
-    ngx_buf_t          *buffer;
+    ngx_buf_t          *buffer; /* 用于接收和缓存客户端发来的数据流 */
 
+    /* 该字段表示将该连接以双向链表形式添加到cycle结构体中
+     * 的reusable_connections_queen双向链表中,表示可以重用的连接.
+     */
     ngx_queue_t         queue;
-
+	/* 连接使用次数,每次建立一条来自客户端的连接, 或者建立一条与后端服务器的连接,number+1 */
     ngx_atomic_uint_t   number;
 
-    ngx_uint_t          requests;
+    ngx_uint_t          requests; /* 处理请求的次数 */
 
     unsigned            buffered:8;
-
+    /* 日志级别   */
     unsigned            log_error:3;     /* ngx_connection_log_error_e */
 
-    unsigned            timedout:1;
-    unsigned            error:1;
-    unsigned            destroyed:1;
+    unsigned            timedout:1;  /* 连接是否超时的标志位 */
+    unsigned            error:1;     /* 连接处理过程中出现错误 */
+    unsigned            destroyed:1; /* 连接是否已销毁的标志位 */
 
-    unsigned            idle:1;
-    unsigned            reusable:1;
-    unsigned            close:1;
+    unsigned            idle:1;     /* 连接是否处于空闲状态的标志位 */
+    unsigned            reusable:1; /* 连接是否可以重用的标志位 */
+    unsigned            close:1;    /* 连接是否关闭的标志位 */
     unsigned            shared:1;
 
-    unsigned            sendfile:1;
+    unsigned            sendfile:1; /* 是否正在发送文件的标志位 */
     unsigned            sndlowat:1;
+	/* 是否使用tcp的nodely特性 */
     unsigned            tcp_nodelay:2;   /* ngx_connection_tcp_nodelay_e */
+	/* 是否使用tcp的nopush特性 */
     unsigned            tcp_nopush:2;    /* ngx_connection_tcp_nopush_e */
 
     unsigned            need_last_buf:1;

@@ -2,6 +2,10 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_gzip_module.html
+ *
+ * ngx_http_gzip_module模块是一个过滤器，使用gzip方法压缩响应数据。通常会把传输的数据压缩到原来的一半或者更多。 
  */
 
 

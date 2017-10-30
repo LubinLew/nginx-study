@@ -2,6 +2,13 @@
 /*
  * Copyright (C) Maxim Dounin
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_auth_request_module.html
+ *
+ * 与 auth_basic不同的是,此模块属于第三方认证, 认证的事情是第三方做的.
+ * 默认不编译该模块，若要开启需加上编译选项：--with-http_auth_request_module
+ *
+ * http://www.cnblogs.com/wangxiaoqiangs/p/6184181.html
  */
 
 
@@ -11,15 +18,15 @@
 
 
 typedef struct {
-    ngx_str_t                 uri;
+    ngx_str_t                 uri;   /* 子请求的uri地址 */
     ngx_array_t              *vars;
 } ngx_http_auth_request_conf_t;
 
 
 typedef struct {
-    ngx_uint_t                done;
-    ngx_uint_t                status;
-    ngx_http_request_t       *subrequest;
+    ngx_uint_t                done;      /* 标记子请求是否完成 */
+    ngx_uint_t                status;    /* 子请求响应的状态码：2xx,4xx,5xx.. */
+    ngx_http_request_t       *subrequest;/* 指向子请求的指针 */
 } ngx_http_auth_request_ctx_t;
 
 

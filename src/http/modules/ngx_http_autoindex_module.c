@@ -2,6 +2,12 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_autoindex_module.html
+ *
+ * 此模块用于自动生成目录文件列表
+ * 默认会编译此模块, 若要剔除该模块需加上编译选项： --without-http_autoindex_module
+ *
  */
 
 

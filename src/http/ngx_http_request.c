@@ -210,12 +210,14 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t    *addr6;
 #endif
 
+   /* 申请 ngx_http_connection_t 结构的内存 */
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);
         return;
     }
 
+	/* 设置tcp连接的的数据为对应的http连接结构 */
     c->data = hc;
 
     /* find the server configuration for the address:port */
@@ -352,6 +354,7 @@ ngx_http_init_connection(ngx_connection_t *c)
         c->log->action = "reading PROXY protocol";
     }
 
+    /* 连接对应的套接字缓存上已经有用户发来的数据 */
     if (rev->ready) {
         /* the deferred accept(), iocp */
 
@@ -385,21 +388,25 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     ngx_http_connection_t     *hc;
     ngx_http_core_srv_conf_t  *cscf;
 
+    /* 从事件中取出tcp连接对应的结构 */
     c = rev->data;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "http wait request handler");
 
+	/* 与客户端的连接是否超时 */
     if (rev->timedout) {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
         ngx_http_close_connection(c);
         return;
     }
 
+	/* 与客户端的连接是否已关闭 */
     if (c->close) {
         ngx_http_close_connection(c);
         return;
     }
 
+    /* 从tcp连接结构中取出http连接对应的结构 */
     hc = c->data;
     cscf = ngx_http_get_module_srv_conf(hc->conf_ctx, ngx_http_core_module);
 
@@ -429,6 +436,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         b->end = b->last + size;
     }
 
+    /* 接收客户端数据 */
     n = c->recv(c, b->last, size);
 
     if (n == NGX_AGAIN) {
@@ -466,6 +474,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         return;
     }
 
+    /* n > 0 */
     b->last += n;
 
     if (hc->proxy_protocol) {
@@ -940,6 +949,10 @@ ngx_http_process_request_line(ngx_event_t *rev)
 
     rc = NGX_AGAIN;
 
+   /* 循环从客户端读数据(ngx_http_read_request_header);
+    * 读到数据后就调用ngx_http_parse_request_line 来解析,
+    * 直到解析到完整的请求行, 即 GET /xxx HTTP/1.x 
+    */
     for ( ;; ) {
 
         if (rc == NGX_AGAIN) {
@@ -1379,12 +1392,17 @@ ngx_http_read_request_header(ngx_http_request_t *r)
     c = r->connection;
     rev = c->read;
 
+    /* 当前的r->header_in缓冲区中仍有数据未处理时, n>0,  这时候需要直接返回,
+     * 因为 未处理的数据中可能请求行的结束.
+     * 从这里可以看出,nginx将请求行存放在 r->header_in 中
+     */
     n = r->header_in->last - r->header_in->pos;
 
     if (n > 0) {
         return n;
     }
 
+    /* 如果有读事件,就接收客户端的请求 */
     if (rev->ready) {
         n = c->recv(c, r->header_in->last,
                     r->header_in->end - r->header_in->last);
@@ -1420,7 +1438,7 @@ ngx_http_read_request_header(ngx_http_request_t *r)
     }
 
     r->header_in->last += n;
-
+    /* 本次从客户端读取了n个字节 */
     return n;
 }
 

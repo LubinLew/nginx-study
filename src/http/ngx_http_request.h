@@ -564,8 +564,10 @@ struct ngx_http_request_s {
     u_char                           *uri_end;
     u_char                           *uri_ext;
     u_char                           *args_start;
+	/* 请求行的开始位置,即 http method的第一个字符位置,例如GET请求,  则指针指向字符G */
     u_char                           *request_start;
     u_char                           *request_end;
+	/* 请求行中http method的最后一个字符位置,例如GET请求,  则指针指向字符T */
     u_char                           *method_end;
     u_char                           *schema_start;
     u_char                           *schema_end;

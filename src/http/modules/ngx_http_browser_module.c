@@ -2,6 +2,10 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_browser_module.html
+ *
+ * 该模块用于创建基于请求头中"User-Agent"字段的变量,这些变量主要用于识别浏览器
  */
 
 

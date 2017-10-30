@@ -2,6 +2,16 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_auth_basic_module.html
+ *
+ * 当某些web页面不想被其他人知道，但是又想让部分人看到,可以使用这个模块,
+ * 当用户访问这些web内容时,会出现一个弹窗要求用户输入用户名和密码,
+ * 只有输入正确的用户密码才允许访问web内容.
+ * 默认情况下nginx会安装ngx_http_auth_basic_module模块，
+ * 如果不需要这个模块，可以加上 --without-http_auth_basic_module
+ *
+ * http://www.cnblogs.com/wangxiaoqiangs/p/6184181.html
  */
 
 

@@ -3480,6 +3480,7 @@ ngx_http_upstream_process_non_buffered_downstream(ngx_http_request_t *r)
     ngx_connection_t     *c;
     ngx_http_upstream_t  *u;
 
+	/* 获取nginx与客户端的连接 */
     c = r->connection;
     u = r->upstream;
     wev = c->write;
@@ -3489,6 +3490,7 @@ ngx_http_upstream_process_non_buffered_downstream(ngx_http_request_t *r)
 
     c->log->action = "sending to client";
 
+	/* 如果发送超时(超时时间是nginx.conf中send_timeout配置项),结束请求 */
     if (wev->timedout) {
         c->timedout = 1;
         ngx_connection_error(c, NGX_ETIMEDOUT, "client timed out");
@@ -3506,6 +3508,7 @@ ngx_http_upstream_process_non_buffered_upstream(ngx_http_request_t *r,
 {
     ngx_connection_t  *c;
 
+    /* 获取nginx与上游服务器间的连接 */
     c = u->peer.connection;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0,
@@ -3513,12 +3516,14 @@ ngx_http_upstream_process_non_buffered_upstream(ngx_http_request_t *r,
 
     c->log->action = "reading upstream";
 
+    /* 如果读取响应超时,则结束请求 */
     if (c->read->timedout) {
         ngx_connection_error(c, NGX_ETIMEDOUT, "upstream timed out");
         ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
         return;
     }
 
+    /* 这个方法才是真正决定以固定内存块作为缓存时如何转发响应的 */
     ngx_http_upstream_process_non_buffered_request(r, 0);
 }
 
@@ -3541,10 +3546,14 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
 
     b = &u->buffer;
 
+    /* u->length 表示还需要接收的上游响应体的长度,
+     * 当length为0时,说明不再需要接收上游的响应,那只能继续向下游发送哦那个响应, 因此do_write只能为1,
+     * do_wirte表示是否向下游客户端发送响应.
+     */
     do_write = do_write || u->length == 0;
 
     for ( ;; ) {
-
+        /* 需要向下游客户端转发响应 */
         if (do_write) {
 
             if (u->out_bufs || u->busy_bufs) {
@@ -3559,8 +3568,9 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
                                         &u->out_bufs, u->output.tag);
             }
 
+			/* 当busy_bufs 为空时,表示需要向下游客户端转发的数据都已经转发完了 */
             if (u->busy_bufs == NULL) {
-
+                /* 如果上游的响应全部接受到了,因为之前已经将所有响应都发送的客户端了,那么这个请求就结束了 */
                 if (u->length == 0
                     || (upstream->read->eof && u->length == -1))
                 {
@@ -3568,6 +3578,7 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
                     return;
                 }
 
+				/* 如果未接收完成,并且recv返回了0, 那么说明socket已经被上游服务器关闭了,请求就异常结束了 */
                 if (upstream->read->eof) {
                     ngx_log_error(NGX_LOG_ERR, upstream->log, 0,
                                   "upstream prematurely closed connection");
@@ -3576,32 +3587,34 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
                                                        NGX_HTTP_BAD_GATEWAY);
                     return;
                 }
-
+               /* 读取上游服务器响应时发生异常, 那么结束请求 */
                 if (upstream->read->error) {
                     ngx_http_upstream_finalize_request(r, u,
                                                        NGX_HTTP_BAD_GATEWAY);
                     return;
                 }
 
+				/* 清空接收缓冲区(初始化 u->buffer)    */
                 b->pos = b->start;
                 b->last = b->start;
             }
         }
 
+        /* 获取 u->buffer缓冲区剩余空间 */
         size = b->end - b->last;
-
+        /* 如果接收缓冲区还有剩余空间,并且与上游服务器间有读事件,那么就接收上游服务器的响应到 u->buffer中 */
         if (size && upstream->read->ready) {
 
             n = upstream->recv(upstream, b->last, size);
-
+            /* 暂时未能获取到数据,等待下次epoll调用再读取 */
             if (n == NGX_AGAIN) {
                 break;
             }
-
+            /* 本次读取到了n个字节的数据 */
             if (n > 0) {
                 u->state->bytes_received += n;
                 u->state->response_length += n;
-
+                /* 调用 input_filter方法处理读取到的数据 */
                 if (u->input_filter(u->input_filter_ctx, n) == NGX_ERROR) {
                     ngx_http_upstream_finalize_request(r, u, NGX_ERROR);
                     return;
@@ -3618,6 +3631,7 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
 
     clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
+    /* 将下游写事件添加到epoll中 */
     if (downstream->data == r) {
         if (ngx_handle_write_event(downstream->write, clcf->send_lowat)
             != NGX_OK)
@@ -3627,6 +3641,7 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
         }
     }
 
+    /* 将下游写事件添加到定时器中 */
     if (downstream->write->active && !downstream->write->ready) {
         ngx_add_timer(downstream->write, clcf->send_timeout);
 
@@ -3634,11 +3649,13 @@ ngx_http_upstream_process_non_buffered_request(ngx_http_request_t *r,
         ngx_del_timer(downstream->write);
     }
 
+    /* 将下游读事件添加到epoll中 */
     if (ngx_handle_read_event(upstream->read, 0) != NGX_OK) {
         ngx_http_upstream_finalize_request(r, u, NGX_ERROR);
         return;
     }
 
+    /* 将下游读事件添加到定时器中 */
     if (upstream->read->active && !upstream->read->ready) {
         ngx_add_timer(upstream->read, u->conf->read_timeout);
 

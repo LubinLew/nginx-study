@@ -2,6 +2,11 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_charset_module.html
+ *
+ * 开启WebDAV扩展动作模块，可为文件和目录指定权限
+ * 默认不编译该模块，若要开启需加上编译选项：--with-http_dav_module
  */
 
 

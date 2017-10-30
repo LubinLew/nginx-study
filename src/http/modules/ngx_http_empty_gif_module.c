@@ -2,6 +2,12 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * 模块 ngx_http_empty_gif_module 返回一个透明像素的GIF图片,
+ * empty gif 通常是做统计用的,例如客户端只想通知一下server,客户端做了什么操作,
+ * 这些操作就可以从日志中分析统计, 由于server不需要返回任何有意义的响应,
+ * 所以empty gif可以最大程度上减少性能消耗.
+ * nginx的空白图片是保存在内存中的，速度比读硬盘上文件块.
  */
 
 #include <ngx_config.h>

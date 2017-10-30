@@ -2,6 +2,10 @@
 /*
  * Copyright (C) Roman Arutyunyan
  * Copyright (C) Nginx, Inc.
+ *
+ * The ngx_http_slice_module module (1.9.8) is a filter that splits a request into subrequests, 
+ * each returning a certain range of response. The filter provides more effective caching of big responses.
+ * This module is not built by default, it should be enabled with the --with-http_slice_module configuration parameter. 
  */
 
 

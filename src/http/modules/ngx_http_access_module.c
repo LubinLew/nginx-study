@@ -2,6 +2,17 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * The ngx_http_access_module module allows limiting access to certain client addresses.
+ * Access can also be limited by password, by the result of subrequest, or by JWT. 
+ * Simultaneous limitation of access by address and by password is controlled by the satisfy directive
+ * location / {
+ *   deny  192.168.1.1;
+ *   allow 192.168.1.0/24;
+ *   allow 10.1.1.0/16;
+ *   allow 2001:0db8::/32;
+ *   deny  all;
+ * }
  */
 
 

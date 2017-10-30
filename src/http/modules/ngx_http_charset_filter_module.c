@@ -2,6 +2,15 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_charset_module.html
+ *
+ * ngx_http_charset_module模块为响应头的“Content-Type”添加指定的字符集。 
+ * 此外，这个模块可以把数据从一个字符集转换为另一个字符集，但也有以下限制：
+ *   1)只能单向转换，即从服务端到客户端，
+ *   2)只有单字节字符集能被转换
+ *   3)或者单字节字符集和UTF-8之间的互相转换。
+ * 默认情况下会编译该模块,若要剔除该模块: --without-http_charset_module
  */
 
 

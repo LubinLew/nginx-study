@@ -2,6 +2,13 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_addition_module.html
+ *
+ * ngx_http_addition_module 是一个过滤模块，它可以在回复正文前后加上内容。 
+ * 默认不会编译这个模块，若要开启需加上编译选项：--with-http_addition_module.
+ * add_before_body URI 表示在响应body前加入URI指向的文件内存
+ * add_after_body URI  表示在响应body后加入URI指向的文件内存
  */
 
 

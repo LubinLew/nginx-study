@@ -3,6 +3,12 @@
  * Copyright (C) Igor Sysoev
  * Copyright (C) Maxim Dounin
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_gunzip_module.html
+ *
+ * ngx_http_gunzip_module模块是一个过滤器， 它为不支持“gzip”编码方法的客户端解压具有“Content-Encoding: gzip”头的响应。 
+ * 当希望存储压缩后的数据以节省空间和减少I/O开销，又不希望对那些不支持gzip压缩的客户端造成不利影响时， 此模块会派上用途。
+ * 这个模块默认不会安装，需要使用--with-http_gunzip_module配置参数来启用。 
  */
 
 

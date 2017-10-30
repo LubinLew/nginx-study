@@ -99,7 +99,9 @@ static uint32_t  usual[] = {
 
 
 /* gcc, icc, msvc and others compile these switches as an jump table */
-
+/*
+ * 解析HTTP请求行的函数, 返回NGX_OK表示解析到了完整的请求行
+ */
 ngx_int_t
 ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
 {
@@ -157,7 +159,7 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
             break;
 
         case sw_method:
-            if (ch == ' ') {
+            if (ch == ' ') {/* GET /xxx, 发现了空格,即method结束了 */
                 r->method_end = p - 1;
                 m = r->request_start;
 
