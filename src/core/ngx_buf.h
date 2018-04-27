@@ -118,15 +118,21 @@ typedef void (*ngx_output_chain_aio_pt)(ngx_output_chain_ctx_t *ctx,
     ngx_file_t *file);
 
 struct ngx_output_chain_ctx_s {
-    ngx_buf_t                   *buf;
-    ngx_chain_t                 *in;
-    ngx_chain_t                 *free;
-    ngx_chain_t                 *busy;
+    ngx_buf_t                   *buf;              /* 保存临时的buf */
+    ngx_chain_t                 *in;               /* 保存了将要发送的chain */
+    ngx_chain_t                 *free;             /* 保存了已经发送完毕的chain，以便于重复利用 */
+    ngx_chain_t                 *busy;             /* 保存了还未发送的chain */
 
-    unsigned                     sendfile:1;
-    unsigned                     directio:1;
+    unsigned                     sendfile:1;       /* sendfile标记 */
+    unsigned                     directio:1;       /* directio标记 */
     unsigned                     unaligned:1;
+	/* 是否需要在内存中保存一份(使用sendfile的话，内存中没有文件的拷贝，
+	 * 而我们有时需要处理文件，此时就需要设置这个标记) 
+	 */
     unsigned                     need_in_memory:1;
+	/* 是否需要在内存中重新复制一份，不管buf是在内存还是文件, 
+     * 这样的话，后续模块可以直接修改这块内存 
+     */  
     unsigned                     need_in_temp:1;
     unsigned                     aio:1;
 
@@ -146,11 +152,11 @@ struct ngx_output_chain_ctx_s {
     off_t                        alignment;
 
     ngx_pool_t                  *pool;
-    ngx_int_t                    allocated;
-    ngx_bufs_t                   bufs;
-    ngx_buf_tag_t                tag;
+    ngx_int_t                    allocated;       /* 已经分别的buf个数 */
+    ngx_bufs_t                   bufs;            /* 对应loc conf中设置的bufs */
+    ngx_buf_tag_t                tag;             /* 模块标记，主要用于buf回收 */
 
-    ngx_output_chain_filter_pt   output_filter;
+    ngx_output_chain_filter_pt   output_filter;   /* 一般是ngx_http_next_filter,也就是继续调用filter链 */
     void                        *filter_ctx;
 };
 
@@ -170,6 +176,7 @@ typedef struct {
 #define ngx_buf_in_memory(b)        (b->temporary || b->memory || b->mmap)
 #define ngx_buf_in_memory_only(b)   (ngx_buf_in_memory(b) && !b->in_file)
 
+/* 该缓冲区中没有实际数据,只有标志位 */
 #define ngx_buf_special(b)                                                   \
     ((b->flush || b->last_buf || b->sync)                                    \
      && !ngx_buf_in_memory(b) && !b->in_file)

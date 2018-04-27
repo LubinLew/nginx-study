@@ -65,11 +65,11 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
             return ctx->output_filter(ctx->filter_ctx, in);
         }
 
-        if (in->next == NULL
+        if (in->next == NULL /* single buf */
 #if (NGX_SENDFILE_LIMIT)
             && !(in->buf->in_file && in->buf->file_last > NGX_SENDFILE_LIMIT)
 #endif
-            && ngx_output_chain_as_is(ctx, in->buf))
+            && ngx_output_chain_as_is(ctx, in->buf)) /* does not require the copy */
         {
             return ctx->output_filter(ctx->filter_ctx, in);
         }
@@ -83,6 +83,7 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
         }
     }
 
+	/* out为最终需要传输的chain，也就是交给剩下的filter处理的chain */
     out = NULL;
     last_out = &out;
     last = NGX_NONE;
@@ -94,16 +95,16 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
             return NGX_AGAIN;
         }
 #endif
-
+        /* 开始遍历chain */
         while (ctx->in) {
 
             /*
              * cycle while there are the ctx->in bufs
              * and there are the free output bufs to copy in
              */
-
+			/* 取得当前chain的buf大小 */
             bsize = ngx_buf_size(ctx->in->buf);
-
+            /* 跳过bsize为0的buf */
             if (bsize == 0 && !ngx_buf_special(ctx->in->buf)) {
 
                 ngx_log_error(NGX_LOG_ALERT, ctx->pool->log, 0,
@@ -126,10 +127,11 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
                 continue;
             }
 
+			/* 判断是否需要复制buf */
             if (ngx_output_chain_as_is(ctx, ctx->in->buf)) {
 
                 /* move the chain link to the output chain */
-
+                /* 如果不需要复制，则直接链接chain到out，然后继续循环 */ 
                 cl = ctx->in;
                 ctx->in = cl->next;
 
@@ -140,24 +142,27 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
                 continue;
             }
 
+            /* 到达这里，说明我们需要拷贝buf，这里buf最终都会被拷贝进ctx->buf中，因此这里先判断ctx->buf是否为空 */
             if (ctx->buf == NULL) {
-
+			   /* 如果为空，则取得buf，这里要注意，一般来说如果没有开启directio的话， 
+			    * 这个函数都会返回NGX_DECLINED 
+			    */
                 rc = ngx_output_chain_align_file_buf(ctx, bsize);
 
                 if (rc == NGX_ERROR) {
                     return NGX_ERROR;
                 }
-
+                /* 大部分情况下，都会落入这个分支 */
                 if (rc != NGX_OK) {
 
                     if (ctx->free) {
 
                         /* get the free buf */
-
+                        /* 准备分配buf，首先在free中寻找可以重用的buf */
                         cl = ctx->free;
                         ctx->buf = cl->buf;
                         ctx->free = cl->next;
-
+                        /* 将要重用的chain链接到ctx->pool中，以便于chain的重用 */
                         ngx_free_chain(ctx->pool, cl);
 
                     } else if (out || ctx->allocated == ctx->bufs.num) {
@@ -223,12 +228,15 @@ ngx_output_chain(ngx_output_chain_ctx_t *ctx, ngx_chain_t *in)
     }
 }
 
-
+/*
+ * 这个函数主要用来判断是否需要复制buf。返回1表示不需要拷贝，否则为需要拷贝
+ */
 static ngx_inline ngx_int_t
 ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
 {
     ngx_uint_t  sendfile;
 
+	/* buf中没有实际数据,  所以不需要拷贝 */
     if (ngx_buf_special(buf)) {
         return 1;
     }
@@ -239,7 +247,7 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
         buf->file->thread_ctx = ctx->filter_ctx;
     }
 #endif
-
+     /* 如果buf在文件中，并且使用了directio的话，需要拷贝buf */
     if (buf->in_file && buf->file->directio) {
         return 0;
     }
@@ -247,7 +255,7 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
     sendfile = ctx->sendfile;
 
 #if (NGX_SENDFILE_LIMIT)
-
+    /* 如果pos大于sendfile的限制，设置sendfile标记为0 */ 
     if (buf->in_file && buf->file_pos >= NGX_SENDFILE_LIMIT) {
         sendfile = 0;
     }
@@ -255,7 +263,7 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
 #endif
 
     if (!sendfile) {
-
+         /* 如果不走sendfile，而且buf不在内存中，则我们就需要复制到内存一份 */
         if (!ngx_buf_in_memory(buf)) {
             return 0;
         }
@@ -268,11 +276,11 @@ ngx_output_chain_as_is(ngx_output_chain_ctx_t *ctx, ngx_buf_t *buf)
         (void) ngx_output_chain_aio_setup(ctx, buf->file);
     }
 #endif
-
+    /* 如果需要内存中有一份拷贝，而并不在内存中，此时返回0，表示需要拷贝 */ 
     if (ctx->need_in_memory && !ngx_buf_in_memory(buf)) {
         return 0;
     }
-
+    /* 如果需要内存中有可修改的拷贝，并且buf存在于只读的内存中或者mmap中，则返回0 */ 
     if (ctx->need_in_temp && (buf->memory || buf->mmap)) {
         return 0;
     }

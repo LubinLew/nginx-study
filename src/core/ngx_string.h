@@ -12,15 +12,10 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-/* 字符串结构
- * 优点:是节约内存,后续不用再计算长度
- * 打印方法: %V/ngx_str_t*
- * 例如解析请求头中的Host字段时就不需要重新申请一块内存
- * 注意事项: data成员不以'\0'结尾
- */
+
 typedef struct {
-    size_t      len;//字符串长度
-    u_char     *data; //字符串起始地址,注意字符串不会以'\0'结尾,完全由len来控制
+    size_t      len;
+    u_char     *data;
 } ngx_str_t;
 
 

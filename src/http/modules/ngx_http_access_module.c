@@ -2,17 +2,6 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
- *
- * The ngx_http_access_module module allows limiting access to certain client addresses.
- * Access can also be limited by password, by the result of subrequest, or by JWT. 
- * Simultaneous limitation of access by address and by password is controlled by the satisfy directive
- * location / {
- *   deny  192.168.1.1;
- *   allow 192.168.1.0/24;
- *   allow 10.1.1.0/16;
- *   allow 2001:0db8::/32;
- *   deny  all;
- * }
  */
 
 
@@ -320,27 +309,21 @@ ngx_http_access_rule(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_access_rule_un_t  *rule_un;
 #endif
 
+    all = 0;
     ngx_memzero(&cidr, sizeof(ngx_cidr_t));
 
     value = cf->args->elts;
 
-    all = (value[1].len == 3 && ngx_strcmp(value[1].data, "all") == 0);
-
-    if (!all) {
+    if (value[1].len == 3 && ngx_strcmp(value[1].data, "all") == 0) {
+        all = 1;
 
 #if (NGX_HAVE_UNIX_DOMAIN)
-
-        if (value[1].len == 5 && ngx_strcmp(value[1].data, "unix:") == 0) {
-            cidr.family = AF_UNIX;
-            rc = NGX_OK;
-
-        } else {
-            rc = ngx_ptocidr(&value[1], &cidr);
-        }
-
-#else
-        rc = ngx_ptocidr(&value[1], &cidr);
+    } else if (value[1].len == 5 && ngx_strcmp(value[1].data, "unix:") == 0) {
+        cidr.family = AF_UNIX;
 #endif
+
+    } else {
+        rc = ngx_ptocidr(&value[1], &cidr);
 
         if (rc == NGX_ERROR) {
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,

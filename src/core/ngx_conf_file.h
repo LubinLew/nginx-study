@@ -19,37 +19,40 @@
  *    TT        command type, i.e. HTTP "location" or "server" command
  */
 
-#define NGX_CONF_NOARGS      0x00000001
-#define NGX_CONF_TAKE1       0x00000002
-#define NGX_CONF_TAKE2       0x00000004
-#define NGX_CONF_TAKE3       0x00000008
-#define NGX_CONF_TAKE4       0x00000010
-#define NGX_CONF_TAKE5       0x00000020
-#define NGX_CONF_TAKE6       0x00000040
-#define NGX_CONF_TAKE7       0x00000080
+#define NGX_CONF_NOARGS      0x00000001   /* 配置项不带参数,例如empty_gif,只是表示启动功能 */
+#define NGX_CONF_TAKE1       0x00000002   /* 配置项必须有1个参数 */
+#define NGX_CONF_TAKE2       0x00000004   /* 配置项必须有2个参数 */
+#define NGX_CONF_TAKE3       0x00000008   /* 配置项必须有3个参数 */
+#define NGX_CONF_TAKE4       0x00000010   /* 配置项必须有4个参数 */
+#define NGX_CONF_TAKE5       0x00000020   /* 配置项必须有5个参数 */
+#define NGX_CONF_TAKE6       0x00000040   /* 配置项必须有6个参数 */
+#define NGX_CONF_TAKE7       0x00000080   /* 配置项必须有7个参数 */
 
 #define NGX_CONF_MAX_ARGS    8
 
-#define NGX_CONF_TAKE12      (NGX_CONF_TAKE1|NGX_CONF_TAKE2)
-#define NGX_CONF_TAKE13      (NGX_CONF_TAKE1|NGX_CONF_TAKE3)
+#define NGX_CONF_TAKE12      (NGX_CONF_TAKE1|NGX_CONF_TAKE2)  /* 配置项必须有1个或2个参数 */
+#define NGX_CONF_TAKE13      (NGX_CONF_TAKE1|NGX_CONF_TAKE3)  /* 配置项必须有1个或3个参数 */
 
-#define NGX_CONF_TAKE23      (NGX_CONF_TAKE2|NGX_CONF_TAKE3)
+#define NGX_CONF_TAKE23      (NGX_CONF_TAKE2|NGX_CONF_TAKE3)  /* 配置项必须有2个或3个参数 */
 
 #define NGX_CONF_TAKE123     (NGX_CONF_TAKE1|NGX_CONF_TAKE2|NGX_CONF_TAKE3)
 #define NGX_CONF_TAKE1234    (NGX_CONF_TAKE1|NGX_CONF_TAKE2|NGX_CONF_TAKE3   \
                               |NGX_CONF_TAKE4)
 
-#define NGX_CONF_ARGS_NUMBER 0x000000ff
-#define NGX_CONF_BLOCK       0x00000100
-#define NGX_CONF_FLAG        0x00000200
-#define NGX_CONF_ANY         0x00000400
-#define NGX_CONF_1MORE       0x00000800
-#define NGX_CONF_2MORE       0x00001000
+#define NGX_CONF_ARGS_NUMBER 0x000000ff    /* 未使用 */
+#define NGX_CONF_BLOCK       0x00000100   /* 配置项定义了一种新的{}块,如http/server/location等 */
+#define NGX_CONF_FLAG        0x00000200   /* 配置项只有1个参数,并且参数必须是on或者off */
+#define NGX_CONF_ANY         0x00000400   /* 不对配置项参数进行校验 */
+#define NGX_CONF_1MORE       0x00000800   /* 配置项必须有1个以上参数 */
+#define NGX_CONF_2MORE       0x00001000   /* 配置项必须有2个以上参数 */
 
+/* 一般由NGX_CORE_MODULE类型的核心模块使用,仅与 NGX_MAIN_CONF 同时设置,表示模块需要解析不属于任何{}块内的全局配置,
+ * 它实际上会指定set方法里的第三个参数conf的值,使之指向每个模块解析全局配置项的配置结果体
+ */
 #define NGX_DIRECT_CONF      0x00010000
 
-#define NGX_MAIN_CONF        0x01000000
-#define NGX_ANY_CONF         0x1F000000
+#define NGX_MAIN_CONF        0x01000000   /* 配置项可以出现在全局配置中,不属于任何{}块 */
+#define NGX_ANY_CONF         0x1F000000   /* 目前只有include配置项使用,但是无意义 */
 
 
 
@@ -75,7 +78,11 @@
 
 
 struct ngx_command_s {
-    ngx_str_t             name;
+    ngx_str_t             name;/* 配置项的名称  ,例如 listen,error_log等 */
+	/* 类型决定该配置项可以在那些块中出现及携带的参数类型和个数 
+	 * 1.可以出现的块 有 NGX_HTTP_MAIN_CONF 等选项
+	 * 2.参数的类型和个数 有 NGX_CONF_TAKE1 等选项,也可以自己自由组合
+	 */
     ngx_uint_t            type;
     char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
     ngx_uint_t            conf;
@@ -128,7 +135,7 @@ struct ngx_conf_s {
     ngx_uint_t            cmd_type;
 
     ngx_conf_handler_pt   handler;
-    char                 *handler_conf;
+    void                 *handler_conf;
 };
 
 

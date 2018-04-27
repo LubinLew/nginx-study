@@ -72,6 +72,9 @@ static char *ngx_http_client_errors[] = {
     /* NGX_HTTP_PARSE_INVALID_REQUEST */
     "client sent invalid request",
 
+    /* NGX_HTTP_PARSE_INVALID_VERSION */
+    "client sent invalid version",
+
     /* NGX_HTTP_PARSE_INVALID_09_METHOD */
     "client sent invalid method in HTTP/0.9 request"
 };
@@ -129,6 +132,10 @@ ngx_http_header_t  ngx_http_headers_in[] = {
                  offsetof(ngx_http_headers_in_t, transfer_encoding),
                  ngx_http_process_header_line },
 
+    { ngx_string("TE"),
+                 offsetof(ngx_http_headers_in_t, te),
+                 ngx_http_process_header_line },
+
     { ngx_string("Expect"),
                  offsetof(ngx_http_headers_in_t, expect),
                  ngx_http_process_unique_header_line },
@@ -137,7 +144,7 @@ ngx_http_header_t  ngx_http_headers_in[] = {
                  offsetof(ngx_http_headers_in_t, upgrade),
                  ngx_http_process_header_line },
 
-#if (NGX_HTTP_GZIP)
+#if (NGX_HTTP_GZIP || NGX_HTTP_HEADERS)
     { ngx_string("Accept-Encoding"),
                  offsetof(ngx_http_headers_in_t, accept_encoding),
                  ngx_http_process_header_line },
@@ -210,14 +217,12 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t    *addr6;
 #endif
 
-   /* 申请 ngx_http_connection_t 结构的内存 */
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);
         return;
     }
 
-	/* 设置tcp连接的的数据为对应的http连接结构 */
     c->data = hc;
 
     /* find the server configuration for the address:port */
@@ -354,7 +359,6 @@ ngx_http_init_connection(ngx_connection_t *c)
         c->log->action = "reading PROXY protocol";
     }
 
-    /* 连接对应的套接字缓存上已经有用户发来的数据 */
     if (rev->ready) {
         /* the deferred accept(), iocp */
 
@@ -388,25 +392,21 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     ngx_http_connection_t     *hc;
     ngx_http_core_srv_conf_t  *cscf;
 
-    /* 从事件中取出tcp连接对应的结构 */
     c = rev->data;
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "http wait request handler");
 
-	/* 与客户端的连接是否超时 */
     if (rev->timedout) {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
         ngx_http_close_connection(c);
         return;
     }
 
-	/* 与客户端的连接是否已关闭 */
     if (c->close) {
         ngx_http_close_connection(c);
         return;
     }
 
-    /* 从tcp连接结构中取出http连接对应的结构 */
     hc = c->data;
     cscf = ngx_http_get_module_srv_conf(hc->conf_ctx, ngx_http_core_module);
 
@@ -436,7 +436,6 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         b->end = b->last + size;
     }
 
-    /* 接收客户端数据 */
     n = c->recv(c, b->last, size);
 
     if (n == NGX_AGAIN) {
@@ -474,7 +473,6 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         return;
     }
 
-    /* n > 0 */
     b->last += n;
 
     if (hc->proxy_protocol) {
@@ -568,6 +566,14 @@ ngx_http_create_request(ngx_connection_t *c)
         return NULL;
     }
 
+    if (ngx_list_init(&r->headers_out.trailers, r->pool, 4,
+                      sizeof(ngx_table_elt_t))
+        != NGX_OK)
+    {
+        ngx_destroy_pool(r->pool);
+        return NULL;
+    }
+
     r->ctx = ngx_pcalloc(r->pool, sizeof(void *) * ngx_http_max_module);
     if (r->ctx == NULL) {
         ngx_destroy_pool(r->pool);
@@ -629,14 +635,15 @@ ngx_http_create_request(ngx_connection_t *c)
 static void
 ngx_http_ssl_handshake(ngx_event_t *rev)
 {
-    u_char                   *p, buf[NGX_PROXY_PROTOCOL_MAX_HEADER + 1];
-    size_t                    size;
-    ssize_t                   n;
-    ngx_err_t                 err;
-    ngx_int_t                 rc;
-    ngx_connection_t         *c;
-    ngx_http_connection_t    *hc;
-    ngx_http_ssl_srv_conf_t  *sscf;
+    u_char                    *p, buf[NGX_PROXY_PROTOCOL_MAX_HEADER + 1];
+    size_t                     size;
+    ssize_t                    n;
+    ngx_err_t                  err;
+    ngx_int_t                  rc;
+    ngx_connection_t          *c;
+    ngx_http_connection_t     *hc;
+    ngx_http_ssl_srv_conf_t   *sscf;
+    ngx_http_core_loc_conf_t  *clcf;
 
     c = rev->data;
     hc = c->data;
@@ -717,6 +724,14 @@ ngx_http_ssl_handshake(ngx_event_t *rev)
         if (buf[0] & 0x80 /* SSLv2 */ || buf[0] == 0x16 /* SSLv3/TLSv1 */) {
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, rev->log, 0,
                            "https ssl handshake: 0x%02Xd", buf[0]);
+
+            clcf = ngx_http_get_module_loc_conf(hc->conf_ctx,
+                                                ngx_http_core_module);
+
+            if (clcf->tcp_nodelay && ngx_tcp_nodelay(c) != NGX_OK) {
+                ngx_http_close_connection(c);
+                return;
+            }
 
             sscf = ngx_http_get_module_srv_conf(hc->conf_ctx,
                                                 ngx_http_ssl_module);
@@ -949,10 +964,6 @@ ngx_http_process_request_line(ngx_event_t *rev)
 
     rc = NGX_AGAIN;
 
-   /* 循环从客户端读数据(ngx_http_read_request_header);
-    * 读到数据后就调用ngx_http_parse_request_line 来解析,
-    * 直到解析到完整的请求行, 即 GET /xxx HTTP/1.x 
-    */
     for ( ;; ) {
 
         if (rc == NGX_AGAIN) {
@@ -1049,7 +1060,14 @@ ngx_http_process_request_line(ngx_event_t *rev)
 
             ngx_log_error(NGX_LOG_INFO, c->log, 0,
                           ngx_http_client_errors[rc - NGX_HTTP_CLIENT_ERROR]);
-            ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
+
+            if (rc == NGX_HTTP_PARSE_INVALID_VERSION) {
+                ngx_http_finalize_request(r, NGX_HTTP_VERSION_NOT_SUPPORTED);
+
+            } else {
+                ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
+            }
+
             return;
         }
 
@@ -1392,17 +1410,12 @@ ngx_http_read_request_header(ngx_http_request_t *r)
     c = r->connection;
     rev = c->read;
 
-    /* 当前的r->header_in缓冲区中仍有数据未处理时, n>0,  这时候需要直接返回,
-     * 因为 未处理的数据中可能请求行的结束.
-     * 从这里可以看出,nginx将请求行存放在 r->header_in 中
-     */
     n = r->header_in->last - r->header_in->pos;
 
     if (n > 0) {
         return n;
     }
 
-    /* 如果有读事件,就接收客户端的请求 */
     if (rev->ready) {
         n = c->recv(c, r->header_in->last,
                     r->header_in->end - r->header_in->last);
@@ -1438,7 +1451,7 @@ ngx_http_read_request_header(ngx_http_request_t *r)
     }
 
     r->header_in->last += n;
-    /* 本次从客户端读取了n个字节 */
+
     return n;
 }
 
@@ -1893,7 +1906,7 @@ ngx_http_process_request(ngx_http_request_t *r)
                               "client SSL certificate verify error: (%l:%s)",
                               rc, X509_verify_cert_error_string(rc));
 
-                ngx_ssl_remove_cached_session(sscf->ssl.ctx,
+                ngx_ssl_remove_cached_session(c->ssl->session_ctx,
                                        (SSL_get0_session(c->ssl->connection)));
 
                 ngx_http_finalize_request(r, NGX_HTTPS_CERT_ERROR);
@@ -1907,7 +1920,7 @@ ngx_http_process_request(ngx_http_request_t *r)
                     ngx_log_error(NGX_LOG_INFO, c->log, 0,
                                   "client sent no required SSL certificate");
 
-                    ngx_ssl_remove_cached_session(sscf->ssl.ctx,
+                    ngx_ssl_remove_cached_session(c->ssl->session_ctx,
                                        (SSL_get0_session(c->ssl->connection)));
 
                     ngx_http_finalize_request(r, NGX_HTTPS_NO_CERT);
@@ -2216,6 +2229,13 @@ ngx_http_request_handler(ngx_event_t *ev)
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
                    "http run request: \"%V?%V\"", &r->uri, &r->args);
 
+    if (c->close) {
+        r->main->count++;
+        ngx_http_terminate_request(r, 0);
+        ngx_http_run_posted_requests(c);
+        return;
+    }
+
     if (ev->delayed && ev->timedout) {
         ev->delayed = 0;
         ev->timedout = 0;
@@ -2330,10 +2350,6 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
             return;
         }
 
-        if (r->main->blocked) {
-            r->write_event_handler = ngx_http_request_finalizer;
-        }
-
         ngx_http_terminate_request(r, rc);
         return;
     }
@@ -2365,6 +2381,26 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
     }
 
     if (r != r->main) {
+        clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+        if (r->background) {
+            if (!r->logged) {
+                if (clcf->log_subrequest) {
+                    ngx_http_log_request(r);
+                }
+
+                r->logged = 1;
+
+            } else {
+                ngx_log_error(NGX_LOG_ALERT, c->log, 0,
+                              "subrequest: \"%V?%V\" logged again",
+                              &r->uri, &r->args);
+            }
+
+            r->done = 1;
+            ngx_http_finalize_connection(r);
+            return;
+        }
 
         if (r->buffered || r->postponed) {
 
@@ -2382,9 +2418,6 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
             r->main->count--;
 
             if (!r->logged) {
-
-                clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-
                 if (clcf->log_subrequest) {
                     ngx_http_log_request(r);
                 }
@@ -2431,7 +2464,7 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
         return;
     }
 
-    if (r->buffered || c->buffered || r->postponed || r->blocked) {
+    if (r->buffered || c->buffered || r->postponed) {
 
         if (ngx_http_set_write_handler(r) != NGX_OK) {
             ngx_http_terminate_request(r, 0);
@@ -2448,6 +2481,8 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
     }
 
     r->done = 1;
+
+    r->read_event_handler = ngx_http_block_reading;
     r->write_event_handler = ngx_http_request_empty_handler;
 
     if (!r->post_action) {
@@ -2510,6 +2545,8 @@ ngx_http_terminate_request(ngx_http_request_t *r, ngx_int_t rc)
     if (mr->write_event_handler) {
 
         if (mr->blocked) {
+            r->connection->error = 1;
+            r->write_event_handler = ngx_http_request_finalizer;
             return;
         }
 
@@ -2565,6 +2602,8 @@ ngx_http_finalize_connection(ngx_http_request_t *r)
         ngx_http_close_request(r, 0);
         return;
     }
+
+    r = r->main;
 
     if (r->reading_body) {
         r->keepalive = 0;
@@ -3048,30 +3087,9 @@ ngx_http_set_keepalive(ngx_http_request_t *r)
         tcp_nodelay = 1;
     }
 
-    if (tcp_nodelay
-        && clcf->tcp_nodelay
-        && c->tcp_nodelay == NGX_TCP_NODELAY_UNSET)
-    {
-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "tcp_nodelay");
-
-        if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY,
-                       (const void *) &tcp_nodelay, sizeof(int))
-            == -1)
-        {
-#if (NGX_SOLARIS)
-            /* Solaris returns EINVAL if a socket has been shut down */
-            c->log_error = NGX_ERROR_IGNORE_EINVAL;
-#endif
-
-            ngx_connection_error(c, ngx_socket_errno,
-                                 "setsockopt(TCP_NODELAY) failed");
-
-            c->log_error = NGX_ERROR_INFO;
-            ngx_http_close_connection(c);
-            return;
-        }
-
-        c->tcp_nodelay = NGX_TCP_NODELAY_SET;
+    if (tcp_nodelay && clcf->tcp_nodelay && ngx_tcp_nodelay(c) != NGX_OK) {
+        ngx_http_close_connection(c);
+        return;
     }
 
 #if 0

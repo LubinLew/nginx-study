@@ -122,7 +122,9 @@ ngx_create_chain_of_bufs(ngx_pool_t *pool, ngx_bufs_t *bufs)
     return chain;
 }
 
-
+/*
+ * 将 输入链表(in)的所有节点都追加到链表(*chain)的末尾
+ */
 ngx_int_t
 ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
 {
@@ -130,6 +132,7 @@ ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
 
     ll = chain;
 
+	/* 找到最后一个cl  并将cl->next的地址赋给ll,  for循环结束后cl为NULL */
     for (cl = *chain; cl; cl = cl->next) {
         ll = &cl->next;
     }
@@ -140,12 +143,17 @@ ngx_chain_add_copy(ngx_pool_t *pool, ngx_chain_t **chain, ngx_chain_t *in)
             return NGX_ERROR;
         }
 
+		/* 将in的buf赋给新申请的cl,完成链表的一个节点的复制 */
         cl->buf = in->buf;
+		/* 把新申请的节点(cl)追加到(*chain)链表的末尾 */
         *ll = cl;
+		/* ll再次指向(*chain)链表的末尾 */
         ll = &cl->next;
+		/* 输入链表节点后移 */
         in = in->next;
     }
 
+	/* (*chain)链表的末尾指向NULL */
     *ll = NULL;
 
     return NGX_OK;
