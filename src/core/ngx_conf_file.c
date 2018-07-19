@@ -368,22 +368,24 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
     for (i = 0; cf->cycle->modules[i]; i++) {
 
         cmd = cf->cycle->modules[i]->commands;
-        if (cmd == NULL) {
+        if (cmd == NULL) {/* 模块无命令集 */
             continue;
         }
 
         for ( /* void */ ; cmd->name.len; cmd++) {
-
+            /* 命令的名字长度不同 */
             if (name->len != cmd->name.len) {
                 continue;
             }
-
+            /* 命令的名字不同 */
             if (ngx_strcmp(name->data, cmd->name.data) != 0) {
                 continue;
             }
 
+			/* ============ 找到同名的命令 ========= */
             found = 1;
 
+            /* 命令所在的模块类型不同,例如该命令在配置文件的NGX_HTTP_MODULE模块, 而命令集中该命令在NGX_MAIL_MODULE模块 */
             if (cf->cycle->modules[i]->type != NGX_CONF_MODULE
                 && cf->cycle->modules[i]->type != cf->module_type)
             {
@@ -391,11 +393,12 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
             }
 
             /* is the directive's location right ? */
-
+			/* 命令的位置不匹配, 例如该命令在配置文件的NGX_HTTP_SRV_CONF位置, 而命令集中该命令在NGX_HTTP_LOC_CONF位置 */
             if (!(cmd->type & cf->cmd_type)) {
                 continue;
             }
 
+            /* 非配置块的命令必须以分号结束(单行命令的验证) */
             if (!(cmd->type & NGX_CONF_BLOCK) && last != NGX_OK) {
                 ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                                   "directive \"%s\" is not terminated by \";\"",
@@ -403,6 +406,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                 return NGX_ERROR;
             }
 
+            /* 配置块的命令必须以'{'开始(块命令的验证) */
             if ((cmd->type & NGX_CONF_BLOCK) && last != NGX_CONF_BLOCK_START) {
                 ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                                    "directive \"%s\" has no opening \"{\"",
@@ -411,7 +415,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
             }
 
             /* is the directive's argument count right ? */
-
+            /* =========== 下面是验证命令的参数个数是否正确 =========== */
             if (!(cmd->type & NGX_CONF_ANY)) {
 
                 if (cmd->type & NGX_CONF_FLAG) {
@@ -437,7 +441,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                     goto invalid;
 
                 } else if (!(cmd->type & argument_number[cf->args->nelts - 1]))
-                {
+                {/* 精确匹配参数的个数, 个数必须相同 */
                     goto invalid;
                 }
             }
@@ -446,7 +450,7 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
 
             conf = NULL;
 
-            if (cmd->type & NGX_DIRECT_CONF) {
+            if (cmd->type & NGX_DIRECT_CONF) { /* 指的是全局配置(不属于{}内部的配置) */
                 conf = ((void **) cf->ctx)[cf->cycle->modules[i]->index];
 
             } else if (cmd->type & NGX_MAIN_CONF) {
@@ -459,8 +463,14 @@ ngx_conf_handler(ngx_conf_t *cf, ngx_int_t last)
                     conf = confp[cf->cycle->modules[i]->ctx_index];
                 }
             }
-
-            rv = cmd->set(cf, cmd, conf);
+            /**
+             * 调用该命令的解析函数,配置文件设置值；
+             * conf为配置的指针地址;
+             * cmd为命令结构；
+             * conf为配置指针地址 一般情况下 conf为模块自定义的配置文件数据结构地址
+             *
+             */            
+             rv = cmd->set(cf, cmd, conf);
 
             if (rv == NGX_CONF_OK) {
                 return NGX_OK;
@@ -511,14 +521,14 @@ ngx_conf_read_token(ngx_conf_t *cf)
     ngx_str_t   *word;
     ngx_buf_t   *b, *dump;
 
-    found = 0;
+    found = 0;//表示找到一个 token
     need_space = 0;
-    last_space = 1;
-    sharp_comment = 0;
-    variable = 0;
-    quoted = 0;
-    s_quoted = 0;
-    d_quoted = 0;
+    last_space = 1;//标志位,表示上一个字符为token分隔符
+    sharp_comment = 0;//注释 #符号
+    variable = 0;//变量符号 $
+    quoted = 0;//标志位,表示上一个字符为反斜杠
+    s_quoted = 0;//标志位,表示已扫描一个双引号,期待另一个双引号
+    d_quoted = 0;//标志位,表示已扫描一个单引号,期待另一个单引号
 
     cf->args->nelts = 0;
     b = cf->conf_file->buffer;
@@ -527,11 +537,12 @@ ngx_conf_read_token(ngx_conf_t *cf)
     start_line = cf->conf_file->line;
 
     file_size = ngx_file_size(&cf->conf_file->file.info);
-
+	
+	/* buf中的数据已经处理完毕，则需要判断是否文件读取完了，如果没有读取完，则继续解析配置文件 */
     for ( ;; ) {
 
         if (b->pos >= b->last) {
-
+            /* 文件已经读取完毕，返回NGX_CONF_FILE_DONE */
             if (cf->conf_file->file.offset >= file_size) {
 
                 if (cf->args->nelts > 0 || !last_space) {
@@ -551,9 +562,10 @@ ngx_conf_read_token(ngx_conf_t *cf)
 
                 return NGX_CONF_FILE_DONE;
             }
-
+            /* buf中已经使用的长度  */
             len = b->pos - start;
 
+			/* 如果len=4096 则表明buf全部读取满了；如果读取了4096个字符，还是没有发现"和'的标示符号，则认为读取失败，参数太长了 */
             if (len == NGX_CONF_BUFFER) {
                 cf->conf_file->line = start_line;
 
@@ -575,11 +587,13 @@ ngx_conf_read_token(ngx_conf_t *cf)
                                    "missing terminating \"%c\" character", ch);
                 return NGX_ERROR;
             }
-
+			
+            /* 将数据移动到buf的头部 */
             if (len) {
                 ngx_memmove(b->start, start, len);
             }
-
+			
+            /* 如果buf有空闲，则继续读取文件中的数据到buf中 */
             size = (ssize_t) (file_size - cf->conf_file->file.offset);
 
             if (size > b->end - (b->start + len)) {
@@ -600,7 +614,8 @@ ngx_conf_read_token(ngx_conf_t *cf)
                                    n, size);
                 return NGX_ERROR;
             }
-
+			
+            /* 设置b->pos和b->last的位置，并重新设置start的位置 */
             b->pos = b->start + len;
             b->last = b->pos + n;
             start = b->start;
@@ -609,26 +624,32 @@ ngx_conf_read_token(ngx_conf_t *cf)
                 dump->last = ngx_cpymem(dump->last, b->pos, size);
             }
         }
-
+		
+        /* ch字符用于读取配置文件信息 */
         ch = *b->pos++;
-
+		
+        /* 如果遇到换行符号 '\n' */
         if (ch == LF) {
             cf->conf_file->line++;
-
+			
+            /* 判断该行是否是注释 如果遇到\n结尾，并且是注释，则设置sharp_comment = 0；当sharp_comment=1 则注释字符不处理 */
             if (sharp_comment) {
                 sharp_comment = 0;
             }
         }
-
+		
+        /* 注释，直接跳过 */
         if (sharp_comment) {
             continue;
         }
-
+		
+        /* 如果为反引号,则设置反引号标识,并且不对该字符进行解析    */
         if (quoted) {
             quoted = 0;
             continue;
         }
-
+		
+        /* 上一个字符为单引号或者双引号,期待一个分隔符   */
         if (need_space) {
             if (ch == ' ' || ch == '\t' || ch == CR || ch == LF) {
                 last_space = 1;

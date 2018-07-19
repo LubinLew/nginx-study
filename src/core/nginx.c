@@ -155,14 +155,18 @@ static ngx_command_t  ngx_core_commands[] = {
       ngx_null_command
 };
 
-
+/**
+ * 核心模块上下文
+ */
 static ngx_core_module_t  ngx_core_module_ctx = {
     ngx_string("core"),
     ngx_core_module_create_conf,
     ngx_core_module_init_conf
 };
 
-
+/**
+ * 核心模块
+ */
 ngx_module_t  ngx_core_module = {
     NGX_MODULE_V1,
     &ngx_core_module_ctx,                  /* module context */
@@ -284,6 +288,9 @@ main(int argc, char *const *argv)
         return 1;
     }
 
+    /**
+     * 初始化所有模块,并对所有模块进行编号处理
+     */
     if (ngx_preinit_modules() != NGX_OK) {
         return 1;
     }
@@ -784,7 +791,7 @@ ngx_get_options(int argc, char *const *argv)
             case 'q':
                 ngx_quiet_mode = 1;
                 break;
-
+            /* set prefix path (default: /usr/local/nginx/) */
             case 'p':
                 if (*p) {
                     ngx_prefix = p;
@@ -914,7 +921,7 @@ ngx_process_options(ngx_cycle_t *cycle)
     u_char  *p;
     size_t   len;
 
-    if (ngx_prefix) {
+    if (ngx_prefix) { /* nginx 启动时使用-p选项指定前缀路径 */
         len = ngx_strlen(ngx_prefix);
         p = ngx_prefix;
 
@@ -941,7 +948,7 @@ ngx_process_options(ngx_cycle_t *cycle)
         if (p == NULL) {
             return NGX_ERROR;
         }
-
+        /* get current working directory */
         if (ngx_getcwd(p, NGX_MAX_PATH) == 0) {
             ngx_log_stderr(ngx_errno, "[emerg]: " ngx_getcwd_n " failed");
             return NGX_ERROR;
@@ -968,7 +975,7 @@ ngx_process_options(ngx_cycle_t *cycle)
 #endif
     }
 
-    if (ngx_conf_file) {
+    if (ngx_conf_file) { /* nginx 启动时使用-c选项指定配置文件 */
         cycle->conf_file.len = ngx_strlen(ngx_conf_file);
         cycle->conf_file.data = ngx_conf_file;
 
@@ -976,10 +983,18 @@ ngx_process_options(ngx_cycle_t *cycle)
         ngx_str_set(&cycle->conf_file, NGX_CONF_PATH);
     }
 
+	/** 合并配置项, 得出最终的完整的配置文件路径    (路径+名字)    
+	 * 使用 cycle->prefix(/usr/local/nginx/) + cycle->conf_file(conf/nginx.conf) 得出配置文件名
+     * 最终结果就是  /usr/local/nginx/conf/nginx.conf
+	 */
     if (ngx_conf_full_name(cycle, &cycle->conf_file, 0) != NGX_OK) {
         return NGX_ERROR;
     }
 
+	/** 重新计算  配置文件前缀(conf_prefix)
+	 * 前面 conf_file 是 /usr/local/nginx/conf/nginx.conf,
+	 * 配置文件前缀就是倒数第一个 '/' 前的路径,即/usr/local/nginx/conf/
+	 */
     for (p = cycle->conf_file.data + cycle->conf_file.len - 1;
          p > cycle->conf_file.data;
          p--)
@@ -991,7 +1006,7 @@ ngx_process_options(ngx_cycle_t *cycle)
         }
     }
 
-    if (ngx_conf_params) {
+    if (ngx_conf_params) {/* 通过启动nginx时配置的参数 */
         cycle->conf_param.len = ngx_strlen(ngx_conf_params);
         cycle->conf_param.data = ngx_conf_params;
     }

@@ -21,7 +21,12 @@ static ngx_uint_t ngx_module_ctx_index(ngx_cycle_t *cycle, ngx_uint_t type,
 ngx_uint_t         ngx_max_module;
 static ngx_uint_t  ngx_modules_n;
 
-
+/**
+ * 初始化所有模块,并对所有模块进行编号处理
+ * ngx_modules数组是在编译的时候生成的，位于objs/ngx_modules.c文件中
+ * 静态加载模块的个数(ngx_modules_n)是通过ngx_modules的数组得到的, 数组最后一个元素为NULL
+ * 最大支持模块个数(ngx_max_module)为 静态加载模块的个数 加上 最大动态加载模块个数
+ */
 ngx_int_t
 ngx_preinit_modules(void)
 {
@@ -61,7 +66,9 @@ ngx_cycle_modules(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
-
+/**
+ * 调用每个模块自定义的 init_module 方法,来完成这个模块的初始化工作
+ */
 ngx_int_t
 ngx_init_modules(ngx_cycle_t *cycle)
 {
@@ -78,7 +85,9 @@ ngx_init_modules(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
-
+/**
+ * 统计指定类型的模块个数, 并设置ctx_index
+ */
 ngx_int_t
 ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
 {
@@ -97,6 +106,7 @@ ngx_count_modules(ngx_cycle_t *cycle, ngx_uint_t type)
             continue;
         }
 
+        /* 如果模块设置了 ctx_index */
         if (module->ctx_index != NGX_MODULE_UNSET_INDEX) {
 
             /* if ctx_index was assigned, preserve it */

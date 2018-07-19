@@ -66,9 +66,9 @@ ngx_event_accept(ngx_event_t *ev)
         } else {
             s = accept(lc->fd, &sa.sockaddr, &socklen);
         }
-#else
+#else  /* NGX_HAVE_ACCEPT4 */
         s = accept(lc->fd, &sa.sockaddr, &socklen);
-#endif
+#endif /* NGX_HAVE_ACCEPT4 */
 
         if (s == (ngx_socket_t) -1) {
             err = ngx_socket_errno;

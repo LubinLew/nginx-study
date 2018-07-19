@@ -222,29 +222,29 @@
  *
  */
 struct ngx_module_s {
-    ngx_uint_t            ctx_index;
-    ngx_uint_t            index;
+    ngx_uint_t            ctx_index; /* 该模块在同类型模块中的标识, */
+    ngx_uint_t            index;  /* 该模块的全局标识符号,例如通过这个标识可以找到该模块的配置文件(ngx_get_conf) */
 
-    char                 *name;
+    char                 *name;   /* 模块名称 */
 
     ngx_uint_t            spare0;
     ngx_uint_t            spare1;
 
-    ngx_uint_t            version;
+    ngx_uint_t            version;  /* 模块版本 */
     const char           *signature;
 
-    void                 *ctx;
-    ngx_command_t        *commands;
+    void                 *ctx;  /* 模块上下文,使用者自定义 */
+    ngx_command_t        *commands;  /* 模块支持的命令集 */
     ngx_uint_t            type; //模块类型 eg NGX_CONF_MODULE/NGX_CORE_MODULE/NGX_EVENT_MODULE/NGX_HTTP_MODULE/NGX_MAIL_MODULE
 
     ngx_int_t           (*init_master)(ngx_log_t *log);       //unused
 
-    ngx_int_t           (*init_module)(ngx_cycle_t *cycle);
+    ngx_int_t           (*init_module)(ngx_cycle_t *cycle);  /* 初始化模块的时候会回调的函数 */
 
-    ngx_int_t           (*init_process)(ngx_cycle_t *cycle);
+    ngx_int_t           (*init_process)(ngx_cycle_t *cycle);  /* 工作进程初始化时调用*/
     ngx_int_t           (*init_thread)(ngx_cycle_t *cycle);   //unused
     void                (*exit_thread)(ngx_cycle_t *cycle);   //unused
-    void                (*exit_process)(ngx_cycle_t *cycle);
+    void                (*exit_process)(ngx_cycle_t *cycle);  /* 工作进程退出调用*/
 
     void                (*exit_master)(ngx_cycle_t *cycle);
 
@@ -258,7 +258,11 @@ struct ngx_module_s {
     uintptr_t             spare_hook7;
 };
 
-
+/*
+ * ngx_core_module_t 为核心模块的上下文结构。
+ * 主要用于核心模块的配置文件创建ngx_core_module_create_conf和初始化ngx_core_module_init_conf,
+ * 放置在ngx_module_t->ctx, 详细见 nginx.c
+ */
 typedef struct {
     ngx_str_t             name; //核心模块名称
     //解析配置文件前,nginx框架会调用 create_conf 方法来创建存储配置项的数据结构
