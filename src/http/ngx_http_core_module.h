@@ -106,23 +106,77 @@ typedef struct {
 
 
 typedef enum {
+	/** 
+	 * 收到完整请求头后的阶段
+	 * 这个阶段没有默认的handler，主要用来读取请求体，并对请求体做相应的处理;
+     * 如果编译时添加 --with-http_realip_module 选项, 那么 ngx_http_realip_module 会在这个阶段挂载 handler
+	 */
     NGX_HTTP_POST_READ_PHASE = 0,
 
+    /**
+     * Server请求地址重写阶段
+     * 这个阶段主要是处理全局的(server block)的rewrite规则;
+     * 在请求的URI与location表达式匹配前，修改请求的URI(重定向)，是一个独立的HTTP阶段;
+     * 默认handler是 ngx_http_core_rewrite_phase 函数, 功能相关可以参考 rewrite等命令
+	 */
     NGX_HTTP_SERVER_REWRITE_PHASE,
 
+	/**
+	 * 配置查找阶段，
+	 * 不支持ch，这个阶段主要是通过uri来查找对应的location。然后将uri和location的数据关联起来。
+	 * 这个阶段主要处理逻辑在checker函数中
+	 * 不能挂载自定义的handler
+	 */
     NGX_HTTP_FIND_CONFIG_PHASE,
+
+	/**
+	 * Location请求地址重写阶段
+	 * 这个主要处理location block的rewrite
+	 */
     NGX_HTTP_REWRITE_PHASE,
+
+	/**
+     * 请求地址重写提交阶段
+     * 这个主要是进行一些校验以及收尾工作，以便于交给后面的模块
+     * 不能挂载自定义handler
+	 */
     NGX_HTTP_POST_REWRITE_PHASE,
 
+	/**
+	 * 访问权限检查准备阶段
+	 * 比如流控这种类型的access就放在这个phase，也就是说它主要是进行一些比较粗粒度的access。
+	 */
     NGX_HTTP_PREACCESS_PHASE,
 
+	/**
+	 * 访问权限检查阶段
+	 * 这个比如存取控制，权限验证就放在这个phase，
+	 * 一般来说处理动作是交给下面的模块做的.这个主要是做一些细粒度的access
+	 */
     NGX_HTTP_ACCESS_PHASE,
+
+	/**
+	 * 访问权限检查提交阶段
+	 * 一般来说当上面的access模块得到access_code之后就会由这个模块根据access_code来进行操作
+	 * 不能挂载自定义handler
+	 */
     NGX_HTTP_POST_ACCESS_PHASE,
 
+	/**
+	 * 配置项try_files和请求镜像处理阶段
+	 */
     NGX_HTTP_PRECONTENT_PHASE,
 
+	/**
+	 * 内容产生阶段
+	 * 内容处理模块，产生文件内容，如果是PHP，去调用phpcgi，如果是代理，就转发给相应的后端服务器
+	 */
     NGX_HTTP_CONTENT_PHASE,
 
+	/**
+	 * 日志模块处理阶段
+	 * 日志处理模块，是每个请求最后一定会执行的。用于打印访问日志。
+	 */
     NGX_HTTP_LOG_PHASE
 } ngx_http_phases;
 

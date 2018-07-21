@@ -2,6 +2,11 @@
 /*
  * Copyright (C) Roman Arutyunyan
  * Copyright (C) Nginx, Inc.
+ *
+ * http://nginx.org/en/docs/http/ngx_http_mirror_module.html
+ * https://ialloc.org/posts/2017/11/20/ngx-notes-http-module-mirror/
+ *
+ * ngx_http_mirror_module 是一个请求镜像模块
  */
 
 
