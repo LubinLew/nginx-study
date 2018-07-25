@@ -99,7 +99,14 @@ static uint32_t  usual[] = {
 
 
 /* gcc, icc, msvc and others compile these switches as an jump table */
-
+/** 解析请求行
+ * 返回值:
+ *     NGX_OK : 请求行解析完成
+ *     NGX_AGAIN : 请求行数据不全,还需要后续数据继续解析
+ *     NGX_HTTP_PARSE_INVALID_METHOD
+ *     NGX_HTTP_PARSE_INVALID_REQUEST
+ *     NGX_HTTP_PARSE_INVALID_09_METHOD
+ */
 ngx_int_t
 ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
 {

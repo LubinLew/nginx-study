@@ -36,7 +36,7 @@ struct ngx_listening_s {
 
     /* handler of accepted connection */
     ngx_connection_handler_pt   handler; //当新的TCP连接建立成功后的处理方法. eg ngx_http_init_connection
-	/* 框架本身并不使用,主要时http或者mail模块 用来保存当前监听端口对应着的所有主机名   */
+	/* 框架本身并不使用,主要是http或者mail模块 用来保存当前监听端口对应着的所有主机名   */
     void               *servers;  /* array of ngx_http_in_addr_t, for example */
 
     ngx_log_t           log;
@@ -119,7 +119,7 @@ typedef enum {
 
 /* 服务器的被动连接(TCP连接) */
 struct ngx_connection_s {
-    void               *data;
+    void               *data;  /* 自定义数据,例如针对http该指针指向 ngx_http_connection_t   或者 ngx_http_request_t */
     ngx_event_t        *read;  /* 该连接对应的读事件 */
     ngx_event_t        *write; /* 该连接对应的写事件 */
 

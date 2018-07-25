@@ -292,15 +292,15 @@ typedef struct {
 typedef void (*ngx_http_client_body_handler_pt)(ngx_http_request_t *r);
 
 typedef struct {
-    ngx_temp_file_t                  *temp_file;
-    ngx_chain_t                      *bufs;
-    ngx_buf_t                        *buf;
-    off_t                             rest;
+    ngx_temp_file_t                  *temp_file;     /* 存放http包体的临时文件 */
+    ngx_chain_t                      *bufs;          /* 接收http包体的缓冲区链表 */
+    ngx_buf_t                        *buf;           /* 直接接收http包体的缓存 */  
+    off_t                             rest;          /* 根据HTTP请求头中Content-Length和已接收的包体长度计算出的还需要接收的包体长度 */
     off_t                             received;
     ngx_chain_t                      *free;
     ngx_chain_t                      *busy;
     ngx_http_chunked_t               *chunked;
-    ngx_http_client_body_handler_pt   post_handler;
+    ngx_http_client_body_handler_pt   post_handler;   /* 包体接收完成之后的回调函数 */
 } ngx_http_request_body_t;
 
 
@@ -572,7 +572,7 @@ struct ngx_http_request_s {
     u_char                           *uri_start;
     u_char                           *uri_end;
     u_char                           *uri_ext;
-    u_char                           *args_start;
+    u_char                           *args_start;    /* URL参数开始(从问号后面一个字符开始) */
     u_char                           *request_start;
     u_char                           *request_end;
     u_char                           *method_end;

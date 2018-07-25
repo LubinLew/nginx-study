@@ -1276,7 +1276,7 @@ ngx_close_idle_connections(ngx_cycle_t *cycle)
     }
 }
 
-
+/* 获取链接(ngx_connection_t)对应的本地监听地址 */
 ngx_int_t
 ngx_connection_local_sockaddr(ngx_connection_t *c, ngx_str_t *s,
     ngx_uint_t port)
@@ -1298,7 +1298,7 @@ ngx_connection_local_sockaddr(ngx_connection_t *c, ngx_str_t *s,
 #if (NGX_HAVE_INET6)
         case AF_INET6:
             sin6 = (struct sockaddr_in6 *) c->local_sockaddr;
-
+            /* 快速确认 IPv6 地址是否为空 */
             for (i = 0; addr == 0 && i < 16; i++) {
                 addr |= sin6->sin6_addr.s6_addr[i];
             }
@@ -1322,7 +1322,7 @@ ngx_connection_local_sockaddr(ngx_connection_t *c, ngx_str_t *s,
     if (addr == 0) {
 
         len = sizeof(ngx_sockaddr_t);
-
+        /* 获取对应socket的监听地址 */
         if (getsockname(c->fd, &sa.sockaddr, &len) == -1) {
             ngx_connection_error(c, ngx_socket_errno, "getsockname() failed");
             return NGX_ERROR;
@@ -1342,6 +1342,7 @@ ngx_connection_local_sockaddr(ngx_connection_t *c, ngx_str_t *s,
         return NGX_OK;
     }
 
+	/* 将地址转换为 ngx_str_t 类型字符串,存入参数 s 中 */
     s->len = ngx_sock_ntop(c->local_sockaddr, c->local_socklen,
                            s->data, s->len, port);
 

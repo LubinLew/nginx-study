@@ -38,7 +38,7 @@ struct ngx_buf_s {
 	*/
     u_char          *start;         /* start of buffer */
     u_char          *end;           /* end of buffer */
-	/* 实际上是一个void*类型的指针，使用者可以关联任意的对象上去，只要对使用者有意义 */
+	/* 实际上是一个void*类型的指针，使用者可以关联任意的对象上去，只对使用者有意义 */
     ngx_buf_tag_t    tag;
 	/* 当buf所包含的内容在文件中时，file字段指向对应的文件对象 */
     ngx_file_t      *file;

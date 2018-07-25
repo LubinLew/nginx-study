@@ -55,6 +55,7 @@ ngx_queue_sort(ngx_queue_t *queue,
 
     q = ngx_queue_head(queue);
 
+    /* 空链表: queue = queue->prev = queue->next */
     if (q == ngx_queue_last(queue)) {
         return;
     }

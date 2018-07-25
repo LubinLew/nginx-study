@@ -25,7 +25,10 @@ static ngx_int_t ngx_http_request_body_length_filter(ngx_http_request_t *r,
 static ngx_int_t ngx_http_request_body_chunked_filter(ngx_http_request_t *r,
     ngx_chain_t *in);
 
-
+/* 在接收较大包体时,无法在一次调度中完成,即不是调用一次改函数就可以完成所有包体的接收,
+ * 但是HTTP框架希望对于它的用户只调用一次该函数就好,这时就需要有另一个方法在该函数没接收到完整包体时,
+ * 如果连接上再次接收到包体就被调用,这个方法是 ngx_http_read_client_request_body_handler
+ */
 ngx_int_t
 ngx_http_read_client_request_body(ngx_http_request_t *r,
     ngx_http_client_body_handler_pt post_handler)
@@ -38,8 +41,10 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
     ngx_http_request_body_t   *rb;
     ngx_http_core_loc_conf_t  *clcf;
 
+    /* 原始请求的引用计数加1 */
     r->main->count++;
 
+    /* 是否操作过请求的包体,如果操作过,则直接调用回调函数返回 */
     if (r != r->main || r->request_body || r->discard_body) {
         r->request_body_no_buffering = 0;
         post_handler(r);
@@ -51,6 +56,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
         goto done;
     }
 
+    /* 分配用于接收包体的管理数据结构的内存 */
     rb = ngx_pcalloc(r->pool, sizeof(ngx_http_request_body_t));
     if (rb == NULL) {
         rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -72,6 +78,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
 
     r->request_body = rb;
 
+    /* 检查请求头中是否有 Content-Length   或者 Transfer-Encoding字段, 如果没有则认为没有包体 */
     if (r->headers_in.content_length_n < 0 && !r->headers_in.chunked) {
         r->request_body_no_buffering = 0;
         post_handler(r);
@@ -84,7 +91,7 @@ ngx_http_read_client_request_body(ngx_http_request_t *r,
         goto done;
     }
 #endif
-
+    /* 计算之前读到的包体大小(POST一些小的表单时,包体和请求头可能在一个封包里) */
     preread = r->header_in->last - r->header_in->pos;
 
     if (preread) {
@@ -871,7 +878,7 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
     if (rb->rest == -1) {
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "http request body content length filter");
-
+        /* 需要接收的包体长度 */
         rb->rest = r->headers_in.content_length_n;
     }
 
@@ -879,7 +886,7 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ll = &out;
 
     for (cl = in; cl; cl = cl->next) {
-
+        /* 接收包体完成则 rb->rest = 0  */
         if (rb->rest == 0) {
             break;
         }
@@ -903,6 +910,7 @@ ngx_http_request_body_length_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
         size = cl->buf->last - cl->buf->pos;
 
+		/* 重新计算需要接收的包体长度 */
         if ((off_t) size < rb->rest) {
             cl->buf->pos = cl->buf->last;
             rb->rest -= size;

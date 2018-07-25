@@ -201,7 +201,11 @@ ngx_http_header_t  ngx_http_headers_in[] = {
     { ngx_null_string, 0, NULL }
 };
 
-
+/** client每发出一个新的http连接请求，nginx的事件模块会对这个请求进行处理，
+ * 最后在ngx_event_accept函数里面会调用accept系统调用来接收这个请求。
+ * 而在ngx_event_accept函数的最后会调用ls->handler即ngx_http_init_connection函数。
+ * 这样一来，新的http连接就会来到http框架中的函数来进行后续的解析和处理。
+ */
 void
 ngx_http_init_connection(ngx_connection_t *c)
 {
@@ -217,6 +221,7 @@ ngx_http_init_connection(ngx_connection_t *c)
     ngx_http_in6_addr_t    *addr6;
 #endif
 
+    /* 申请 http链接结构体内存 */
     hc = ngx_pcalloc(c->pool, sizeof(ngx_http_connection_t));
     if (hc == NULL) {
         ngx_http_close_connection(c);
@@ -320,8 +325,8 @@ ngx_http_init_connection(ngx_connection_t *c)
     c->log_error = NGX_ERROR_INFO;
 
     rev = c->read;
-    rev->handler = ngx_http_wait_request_handler;
-    c->write->handler = ngx_http_empty_handler;
+    rev->handler = ngx_http_wait_request_handler; /* 设置读事件回调函数 */
+    c->write->handler = ngx_http_empty_handler;   /* 设置写事件回调函数 */
 
 #if (NGX_HTTP_V2)
     if (hc->addr_conf->http2) {
@@ -359,6 +364,10 @@ ngx_http_init_connection(ngx_connection_t *c)
         c->log->action = "reading PROXY protocol";
     }
 
+    /* 读事件触发,说明socket上已有用户发来的数据,
+     * 这里只可能是当listen的时候添加了defered参数并且内核支持，
+     * 在ngx_event_accept的时候才会置1，才可能执行下面的if里面的内容，否则不会只需if里面的内容
+     */
     if (rev->ready) {
         /* the deferred accept(), iocp */
 
@@ -367,7 +376,7 @@ ngx_http_init_connection(ngx_connection_t *c)
             return;
         }
 
-        rev->handler(rev);
+        rev->handler(rev); //ngx_http_wait_request_handler
         return;
     }
 
@@ -381,6 +390,11 @@ ngx_http_init_connection(ngx_connection_t *c)
 }
 
 
+/** 客户端建立连接后，只有第一次读取客户端数据的时候，执行的handler指向该函数，
+ * 当客户端连接建立成功后，只有第一次读取客户端数据才会走该函数，
+ * 如果在保活期内又收到客户端请求，则不会再走该函数，而是执行ngx_http_process_request_line，
+ * 因为该函数把handler指向了ngx_http_process_request_line 
+ */
 static void
 ngx_http_wait_request_handler(ngx_event_t *rev)
 {
@@ -396,6 +410,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "http wait request handler");
 
+    /* 如果tcp连接建立后，等了client_header_timeout秒一直没有收到客户端的数据包过来，则关闭连接 */
     if (rev->timedout) {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
         ngx_http_close_connection(c);
@@ -436,15 +451,22 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         b->end = b->last + size;
     }
 
+    /* 接收客户端数据(调用函数 ngx_unix_recv)
+     * 如果一次没有把所有客户端的数据读取完，则在ngx_http_process_request_line中会继续读取
+     * 与ngx_http_read_request_header配合读
+     */
     n = c->recv(c, b->last, size);
-
+    /* recv函数返回 EAGAIN(已经没有数据可读取) 或者 EINTR(被信号打断), 说明socket还未就绪,没有读到数据 */
     if (n == NGX_AGAIN) {
 
         if (!rev->timer_set) {
             ngx_add_timer(rev, c->listening->post_accept_timeout);
             ngx_reusable_connection(c, 1);
         }
-
+        /* 当出现EAGAIN的时候，需要再次把该事件注册到epoll里面去。
+         * 这是因为nginx里面的epoll采用的是ET触发模式，epoll_wait模式将无法再次获取该事件，所以需要重新进行注册。
+         * 然后函数会直接return,将控制权交换给HTTP框架。  
+         */
         if (ngx_handle_read_event(rev, 0) != NGX_OK) {
             ngx_http_close_connection(c);
             return;
@@ -461,11 +483,13 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         return;
     }
 
+   /* 接收数据出错,关闭链接 */
     if (n == NGX_ERROR) {
         ngx_http_close_connection(c);
         return;
     }
 
+	/* 对端(客户端)关闭了链接 */
     if (n == 0) {
         ngx_log_error(NGX_LOG_INFO, c->log, 0,
                       "client closed connection");
@@ -473,6 +497,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
         return;
     }
 
+    /* 到达这里,从recv函数接收到来自客户端的n的个字节的数据 */
     b->last += n;
 
     if (hc->proxy_protocol) {
@@ -499,13 +524,15 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
     c->log->action = "reading client request line";
 
     ngx_reusable_connection(c, 0);
-
+	
+	/*重新让c->data指向新开辟的 ngx_http_request_t, 之前指向 ngx_http_connection_t */
     c->data = ngx_http_create_request(c);
     if (c->data == NULL) {
         ngx_http_close_connection(c);
         return;
     }
 
+    /* 设置新的读事件回调函数 */
     rev->handler = ngx_http_process_request_line;
     ngx_http_process_request_line(rev);
 }
@@ -955,6 +982,10 @@ ngx_http_process_request_line(ngx_event_t *rev)
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, rev->log, 0,
                    "http process request line");
 
+    /* 检查这个读事件是否已经超时，超时时间仍然是nginx.conf配置文件中指定的client_header_timeout。
+     * 如果ngx_event_t事件的timeout标志为1，则认为接收HTTP请求已经超时，调用ngx_http_close_request方法关闭请求，
+     * 同时由ngx_http_process_request_line方法中返回。
+     */
     if (rev->timedout) {
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT, "client timed out");
         c->timedout = 1;
@@ -964,18 +995,27 @@ ngx_http_process_request_line(ngx_event_t *rev)
 
     rc = NGX_AGAIN;
 
+    /* 读取一行数据，分析出请求行中包含的method、uri、http_version信息。
+     * 然后再一行一行处理请求头，并根据请求method与请求头的信息来决定
+     * 是否有请求体以及请求体的长度，然后再去读取请求体 
+     */
     for ( ;; ) {
 
         if (rc == NGX_AGAIN) {
             n = ngx_http_read_request_header(r);
-
+			
+			/* 如果内核中的数据已经读完，但这时候头部字段还没有解析完毕，则把控制器交还给HTTP，
+			 * 当数据到来的时候触发 ngx_http_process_request_line，
+			 * 因为该函数外面rev->handler = ngx_http_process_request_line;
+             */
             if (n == NGX_AGAIN || n == NGX_ERROR) {
                 return;
             }
         }
 
+        /* 解析请求行 */
         rc = ngx_http_parse_request_line(r, r->header_in);
-
+        /* 解析到完整的请求行,获取到 method,uri,parameter,  version */
         if (rc == NGX_OK) {
 
             /* the request line has been parsed successfully */
@@ -990,6 +1030,7 @@ ngx_http_process_request_line(ngx_event_t *rev)
             r->method_name.len = r->method_end - r->request_start + 1;
             r->method_name.data = r->request_line.data;
 
+            /* http版本信息 例如 'HTTP/1.1' */
             if (r->http_protocol.data) {
                 r->http_protocol.len = r->request_end - r->http_protocol.data;
             }
@@ -1101,7 +1142,7 @@ ngx_http_process_request_uri(ngx_http_request_t *r)
 {
     ngx_http_core_srv_conf_t  *cscf;
 
-    if (r->args_start) {
+    if (r->args_start) {/* URI中包含参数的情况,去掉参数部分的长度 */
         r->uri.len = r->args_start - 1 - r->uri_start;
     } else {
         r->uri.len = r->uri_end - r->uri_start;
@@ -1410,16 +1451,18 @@ ngx_http_read_request_header(ngx_http_request_t *r)
     c = r->connection;
     rev = c->read;
 
+    /* 计算存储http头部的ngx_buf_t中还剩多少字节未解析 */
     n = r->header_in->last - r->header_in->pos;
 
+    /* 有未解析的数据, 则直接返回解析 */
     if (n > 0) {
         return n;
     }
 
-    if (rev->ready) {
+    if (rev->ready) {/* 从内核接收客户端数据 */
         n = c->recv(c, r->header_in->last,
                     r->header_in->end - r->header_in->last);
-    } else {
+    } else {/* 内核中无数据 */
         n = NGX_AGAIN;
     }
 
@@ -1933,7 +1976,7 @@ ngx_http_process_request(ngx_http_request_t *r)
     }
 
 #endif
-
+    /* 把读事件从定时器移除，无需再接受http请求头 */
     if (c->read->timer_set) {
         ngx_del_timer(c->read);
     }

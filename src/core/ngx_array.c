@@ -8,17 +8,23 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-
+/** 创建动态数组
+ * 数组每个元素占用内存为 size 个字节
+ * 数组的元素个数为 n
+ * 申请的内存都由内存池 p 管理
+ */
 ngx_array_t *
 ngx_array_create(ngx_pool_t *p, ngx_uint_t n, size_t size)
 {
     ngx_array_t *a;
 
+   /* 为 ngx_array_t 申请内存 */
     a = ngx_palloc(p, sizeof(ngx_array_t));
     if (a == NULL) {
         return NULL;
     }
 
+	/* 为数组元素申请内存,并初始化 ngx_array_t 结构  */
     if (ngx_array_init(a, p, n, size) != NGX_OK) {
         return NULL;
     }

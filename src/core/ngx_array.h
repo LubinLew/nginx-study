@@ -2,6 +2,9 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * @动态数组@
+ * ngx_array_t是一个顺序容器,以数组的形式存储元素,并支持动态改变数组大小
  */
 
 
@@ -14,14 +17,14 @@
 
 
 typedef struct {
-    void        *elts;
-    ngx_uint_t   nelts;
-    size_t       size;
-    ngx_uint_t   nalloc;
-    ngx_pool_t  *pool;
+    void        *elts;   /* 指向数组的首地址 */
+    ngx_uint_t   nelts;  /* 数组中已经使用的元素个数 */
+    size_t       size;   /* 给个数组元素占用内存的大小 */
+    ngx_uint_t   nalloc; /* 当前数组中能够容纳元素的总个数 */
+    ngx_pool_t  *pool;   /* 内存池对象,动态数组负责内存的申请 */
 } ngx_array_t;
 
-
+/* 创建动态数组 */
 ngx_array_t *ngx_array_create(ngx_pool_t *p, ngx_uint_t n, size_t size);
 void ngx_array_destroy(ngx_array_t *a);
 void *ngx_array_push(ngx_array_t *a);
