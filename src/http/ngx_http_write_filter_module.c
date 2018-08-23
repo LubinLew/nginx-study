@@ -2,6 +2,8 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * 将输出链拷贝到r->out中，然后输出内容
  */
 
 

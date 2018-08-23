@@ -2,6 +2,8 @@
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
+ *
+ * 用来将所有header组成一个完整的HTTP头
  */
 
 
