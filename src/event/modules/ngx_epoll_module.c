@@ -47,7 +47,17 @@ struct epoll_event {
     epoll_data_t  data;
 };
 
-
+/*
+ * 创建一个epoll实例.  
+ * epoll_create() 返回一个指向新创建的epoll实例的文件描述符,这个描述符用于之后所有操作这个epoll实例的接口.
+ * 当不需要这个epoll实例时, 使用 close()函数关闭这个对应的文件描述符即可.
+ * 当所有指向这个epoll实例的文件描述符都关闭后, 内核会销毁这个实例相关的资源,以便重用.
+ *     
+ * 从 Linux 2.6.8 开始, 参数 size 会被忽略, 但是必须要大于0, 这样才能确保向后兼容.
+ * 因为最早期的 epoll_create() 实现中, 参数 size 用于告知内核调用者期望加入到epoll实例的文件描述符的个数,
+ * 内核根据这个这个参数预先申请空间, 但是新版本内核中使用动态申请空间的方式, 所以参数就没有必要了.
+ * 保留这个参数并且要求其值大于0, 只是为了向后兼容(代码能在旧内核上运行).
+*/
 int epoll_create(int size);
 
 int epoll_create(int size)
@@ -55,7 +65,71 @@ int epoll_create(int size)
     return -1;
 }
 
+/*
+ * 参数 op 取值:
+ *    1)EPOLL_CTL_ADD : 向epoll实例注册指定文件描述符
+ *    2)EPOLL_CTL_MOD : 修改已经注册的文件描述符对应的监听事件
+ *    3)EPOLL_CTL_DEL : 从epoll实例移除指定文件描述符
+ *       在内核2.6.9版本之前, EPOLL_CTL_DEL 操作 尽管参数event会被忽略,但是不能为NULL,
+ *       从内核2.6.9版本开始, 参数event可以为NULL, 但是为了向后兼容参数event最好不要设置为NULL
+ *
+ * 参数 event 结构体:
+ * 	typedef union epoll_data {
+ *      void		*ptr;
+ *      int 		 fd;
+ *      uint32_t	 u32;
+ *      uint64_t	 u64;
+ *   } epoll_data_t;
+ 
+ *   struct epoll_event {
+ *      uint32_t	 events;
+ *      epoll_data_t data; // User data variable
+ *    };
+ *
+ *     EPOLLIN
+ *			触发该事件，表示对应的文件描述符上有可读数据(包括对端SOCKET正常关闭)；
+ 
+	 EPOLLOUT
+			触发该事件，表示对应的文件描述符上可以写数据；
+ 
+	 EPOLLRDHUP (since Linux 2.6.17)
+			Stream socket peer closed connection, or shut down writing half of connection.	(This flag is especially useful for writing
+			simple code to detect peer shutdown when using Edge Triggered monitoring.)
+ 
+	 EPOLLPRI
+			There is urgent data available for read(2) operations.
+ 
+	 EPOLLERR
+			表示对应的文件描述符发生错误；.  epoll_wait(2) will always wait for this event; it is not nec‐
+			essary to set it in events.
+ 
+	 EPOLLHUP
+			表示对应的文件描述符被挂断；.  epoll_wait(2) will always wait for this event; it is not necessary  to
+			set it in events.
+ 
+	 EPOLLET
+		首先EPOLL事件有两种模型：
+			Edge Triggered(ET) :高速工作方式，错误率比较大，只支持no_block socket (非阻塞socket)
+			LevelTriggered(LT) :缺省工作方式，即默认的工作方式,支持blocksocket和no_blocksocket，错误率比较小。
 
+	 将EPOLL设为边缘触发(Edge Triggered)模式，这是相对于水平触发(Level Triggered)来说的。
+	 ET模式仅当状态发生变化的时候才获得通知,这里所谓的状态的变化并不包括缓冲区中还有未处理的数据,
+	 也就是说,如果要采用ET模式,需要一直read/write直到出错为止,
+	 很多人反映为什么采用ET模式只接收了一部分数据就再也得不到通知了,大多因为这样;
+	 而LT模式是只要有数据没有处理就会一直通知下去的.
+	 
+	 读：只要可读，就一直读，直到返回0，或者 errno = EAGAIN
+     写:只要可写，就一直写，直到数据发送完，或者 errno = EAGAIN 下次再写
+			Sets  the  Edge  Triggered behavior for the associated file descriptor.  The default behavior for epoll is Level Triggered.
+			See epoll(7) for more detailed information about Edge and Level Triggered event distribution architectures.
+ 
+	 EPOLLONESHOT (since Linux 2.6.2)
+	 	只监听一次事件，当监听完这次事件之后，如果还需要继续监听这个socket的话，需要再次把这个socket加入到EPOLL队列里。
+			Sets the one-shot behavior for the associated file descriptor.	 This  means  that	after  an  event  is  pulled  out  with
+			epoll_wait(2)  the	associated	file  descriptor  is  internally disabled and no other events will be reported by the epoll
+			interface.	The user must call epoll_ctl() with EPOLL_CTL_MOD to rearm the file descriptor with a new event mask.
+ */
+ 
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
 
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)

@@ -66,7 +66,7 @@ struct ngx_cycle_s {
     ngx_list_t                open_files;    /* 打开的文件 */
     ngx_list_t                shared_memory; /* 共享内存链表 */
 
-    ngx_uint_t                connection_n;  /* 连接的个数 */
+    ngx_uint_t                connection_n;  /* 连接的最大个数(对应配置文件中的 worker_connections) */
     ngx_uint_t                files_n;       /* 打开文件的个数 */
 
     ngx_connection_t         *connections;   /* 连接事件 */

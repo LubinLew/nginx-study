@@ -1110,7 +1110,7 @@ ngx_ssl_ecdh_curve(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *name)
 #if SSL_CTRL_SET_ECDH_AUTO
     /* not needed in OpenSSL 1.1.0+ */
     SSL_CTX_set_ecdh_auto(ssl->ctx, 1);
-#endif
+#endif /* SSL_CTRL_SET_ECDH_AUTO */
 
     if (ngx_strcmp(name->data, "auto") == 0) {
         return NGX_OK;
@@ -1122,7 +1122,7 @@ ngx_ssl_ecdh_curve(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *name)
         return NGX_ERROR;
     }
 
-#else
+#else /* (defined SSL_CTX_set1_curves_list || defined SSL_CTRL_SET_CURVES_LIST) */
 
     int      nid;
     char    *curve;
@@ -1154,9 +1154,9 @@ ngx_ssl_ecdh_curve(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *name)
     SSL_CTX_set_tmp_ecdh(ssl->ctx, ecdh);
 
     EC_KEY_free(ecdh);
-#endif
-#endif
-#endif
+#endif /* (defined SSL_CTX_set1_curves_list || defined SSL_CTRL_SET_CURVES_LIST) */
+#endif /* OPENSSL_NO_ECDH */
+#endif /* OPENSSL_VERSION_NUMBER >= 0x0090800fL */
 
     return NGX_OK;
 }

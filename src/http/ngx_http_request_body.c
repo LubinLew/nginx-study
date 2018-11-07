@@ -25,7 +25,7 @@ static ngx_int_t ngx_http_request_body_length_filter(ngx_http_request_t *r,
 static ngx_int_t ngx_http_request_body_chunked_filter(ngx_http_request_t *r,
     ngx_chain_t *in);
 
-/* 在接收较大包体时,无法在一次调度中完成,即不是调用一次改函数就可以完成所有包体的接收,
+/* 在接收较大包体时,无法在一次调度中完成,即不是调用一次该函数就可以完成所有包体的接收,
  * 但是HTTP框架希望对于它的用户只调用一次该函数就好,这时就需要有另一个方法在该函数没接收到完整包体时,
  * 如果连接上再次接收到包体就被调用,这个方法是 ngx_http_read_client_request_body_handler
  */

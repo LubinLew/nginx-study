@@ -17,6 +17,9 @@ static ngx_rbtree_node_t  ngx_event_timer_sentinel;
  * the event timer rbtree may contain the duplicate keys, however,
  * it should not be a problem, because we use the rbtree to find
  * a minimum timer value only
+ *
+ * 时间定时器的红黑树 可能会有重复的关键字,但是这不会引起问题,
+ * 因为我们只用这个红黑树搜索最小(时间最短)的定时器
  */
 
 ngx_int_t

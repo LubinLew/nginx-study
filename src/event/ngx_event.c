@@ -259,7 +259,12 @@ ngx_process_events_and_timers(ngx_cycle_t *cycle)
     ngx_event_process_posted(cycle, &ngx_posted_events);
 }
 
-
+/*
+ * 将读事件添加到事件驱动模块中, 
+ * 这样事件对应的TCP连接上一旦出现可读事件, 就会回调该事件的handler方法
+ *
+ * 由于nginx 主要工作与 epoll 的ET模式下,所以参数 flags 可以忽略
+ */
 ngx_int_t
 ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
 {
@@ -328,6 +333,13 @@ ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
 }
 
 
+/*
+ * 将写事件添加到事件驱动模块中, 
+ *
+ * 参数 lowat 表示只有当套接字缓冲区中必须有lowat大小的可用空间时,
+ * 事件收集器(epoll_wait)才能处理这个可写事件, 
+ * lowat为0表不考虑可写缓冲区大小
+ */
 ngx_int_t
 ngx_handle_write_event(ngx_event_t *wev, size_t lowat)
 {
@@ -606,16 +618,17 @@ ngx_event_process_init(ngx_cycle_t *cycle)
     }
 
     for (m = 0; cycle->modules[m]; m++) {
-        if (cycle->modules[m]->type != NGX_EVENT_MODULE) {
+        if (cycle->modules[m]->type != NGX_EVENT_MODULE) { /* 跳过非事件模块 */
             continue;
         }
 
-        if (cycle->modules[m]->ctx_index != ecf->use) {
+        if (cycle->modules[m]->ctx_index != ecf->use) { /* 跳过非有效的事件模块 */
             continue;
         }
 
         module = cycle->modules[m]->ctx;
 
+		/* 事件模块初始化  ,例如:ngx_epoll_init */
         if (module->actions.init(cycle, ngx_timer_resolution) != NGX_OK) {
             /* fatal */
             exit(2);
@@ -680,6 +693,11 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 
 #endif
 
+    /* 预先为连接分配内存, 
+     * 后续还要为读写事件预分配内存, 而这些内存的大小取决于 worker_connections 设置的值,
+     * 设置的过大会导致内存不足(nginx无法启动或者reload时无法启动), 过小又不能充分发挥nginx的性能,
+     * 所以设置 worker_connections 时需要经过测试评估才能得到一个比较合适的值.
+     */
     cycle->connections =
         ngx_alloc(sizeof(ngx_connection_t) * cycle->connection_n, cycle->log);
     if (cycle->connections == NULL) {
@@ -688,24 +706,28 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 
     c = cycle->connections;
 
+    /* 预先为读事件分配内存 */
     cycle->read_events = ngx_alloc(sizeof(ngx_event_t) * cycle->connection_n,
                                    cycle->log);
     if (cycle->read_events == NULL) {
         return NGX_ERROR;
     }
 
+    /* 读事件的初始化 */
     rev = cycle->read_events;
     for (i = 0; i < cycle->connection_n; i++) {
         rev[i].closed = 1;
         rev[i].instance = 1;
     }
 
+    /* 预先为写事件分配内存 */
     cycle->write_events = ngx_alloc(sizeof(ngx_event_t) * cycle->connection_n,
                                     cycle->log);
     if (cycle->write_events == NULL) {
         return NGX_ERROR;
     }
 
+    /* 写事件的初始化 */
     wev = cycle->write_events;
     for (i = 0; i < cycle->connection_n; i++) {
         wev[i].closed = 1;

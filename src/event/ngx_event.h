@@ -28,11 +28,11 @@ typedef struct {
 
 
 struct ngx_event_s {
-    void            *data;
+    void            *data; /* 事件相关的对象,通常指向 ngx_connection_t */
 
-    unsigned         write:1;
+    unsigned         write:1; /* 值为1时表示事件是可写的 */
 
-    unsigned         accept:1;
+    unsigned         accept:1; /* 值为1时表示事件可建立新的连接 */
 
     /* used to detect the stale events in kqueue and epoll */
     unsigned         instance:1;
@@ -48,18 +48,18 @@ struct ngx_event_s {
     /* the ready event; in aio mode 0 means that no operation can be posted */
     unsigned         ready:1;
 
-    unsigned         oneshot:1;
+    unsigned         oneshot:1; /* 仅对 kqueue 和 eventprot 有意义 */
 
     /* aio operation is complete */
     unsigned         complete:1;
 
-    unsigned         eof:1;
-    unsigned         error:1;
+    unsigned         eof:1; /* 值为1时表示当前处理的字符流已经结束 */
+    unsigned         error:1; /* 值为1时表示事件处理过程中出现错误 */
 
-    unsigned         timedout:1;
-    unsigned         timer_set:1;
+    unsigned         timedout:1; /* 值为1时表示事件超时, 提示事件的消费模块做超时处理 */
+    unsigned         timer_set:1;  /* 值为1时表示事件存在于定时器中 */
 
-    unsigned         delayed:1;
+    unsigned         delayed:1; /* 值为1时表示需要延时处理这个事件,用于限速功能 */
 
     unsigned         deferred_accept:1;
 
@@ -68,7 +68,7 @@ struct ngx_event_s {
 
     unsigned         posted:1;
 
-    unsigned         closed:1;
+    unsigned         closed:1;  /* epoll不使用 */
 
     /* to test on worker exit */
     unsigned         channel:1;
@@ -104,17 +104,17 @@ struct ngx_event_s {
 #if (NGX_HAVE_KQUEUE) || (NGX_HAVE_IOCP)
     int              available;
 #else
-    unsigned         available:1;
+    unsigned         available:1; /* 在epoll事件驱动机制下表示一次尽可能多地建立TCP连接,与 multi_accept 配置项对应 */
 #endif
 
-    ngx_event_handler_pt  handler;
+    ngx_event_handler_pt  handler; /* 事件发生时的处理方法, 每个事件消费模块都会重新实现它 */
 
 
 #if (NGX_HAVE_IOCP)
     ngx_event_ovlp_t ovlp;
 #endif
 
-    ngx_uint_t       index;
+    ngx_uint_t       index; /* epoll不使用 */
 
     ngx_log_t       *log;
 
@@ -175,21 +175,30 @@ struct ngx_event_aio_s {
 
 
 typedef struct {
+    /* 添加事件方法,添加一个事件到事件驱动机制中,事件发生后可以在 process_events 方法中获取 */
     ngx_int_t  (*add)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+	/* 删除事件方法, 删除一个已经存在于事件驱动机制中的事件,这样在 process_events 方法中就无法获取该事件了 */
     ngx_int_t  (*del)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
 
+    /* 启用一个事件 */
     ngx_int_t  (*enable)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+	/* 禁用一个事件 */
     ngx_int_t  (*disable)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
 
+    /* 向事件驱动机制中添加一个新的连接, 这意味着事件上的读写方法都添加到事件驱动机制中了 */
     ngx_int_t  (*add_conn)(ngx_connection_t *c);
+	/* 从事件驱动机制中移除一个连接的读写事件 */
     ngx_int_t  (*del_conn)(ngx_connection_t *c, ngx_uint_t flags);
 
     ngx_int_t  (*notify)(ngx_event_handler_pt handler);
 
+    /* 该方法用于处理事件,他是处理分发事件的核心 */
     ngx_int_t  (*process_events)(ngx_cycle_t *cycle, ngx_msec_t timer,
                                  ngx_uint_t flags);
 
+	/* 初始化事件驱动模块的方法 */
     ngx_int_t  (*init)(ngx_cycle_t *cycle, ngx_msec_t timer);
+	/* 退出事件驱动模块前调用的方法 */
     void       (*done)(ngx_cycle_t *cycle);
 } ngx_event_actions_t;
 
@@ -455,12 +464,12 @@ typedef struct {
 
 
 typedef struct {
-    ngx_str_t              *name;
+    ngx_str_t              *name; /* 事件模块的名称 */
 
     void                 *(*create_conf)(ngx_cycle_t *cycle);
     char                 *(*init_conf)(ngx_cycle_t *cycle, void *conf);
 
-    ngx_event_actions_t     actions;
+    ngx_event_actions_t     actions; /* 事件模块的抽象方法 */
 } ngx_event_module_t;
 
 
