@@ -71,6 +71,8 @@ struct ngx_peer_connection_s {
 	//标志位, 为1时表示上面的connection已经缓存
     unsigned                         cached:1;
     unsigned                         transparent:1;
+    unsigned                         so_keepalive:1;
+    unsigned                         down:1;
 
                                      /* ngx_connection_log_error_e */
     unsigned                         log_error:2; /* 由于是2位,所以只能表达ngx_connection_log_error_e的前4个错误 */
