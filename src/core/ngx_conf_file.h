@@ -52,7 +52,7 @@
 #define NGX_DIRECT_CONF      0x00010000
 
 #define NGX_MAIN_CONF        0x01000000   /* 配置项可以出现在全局配置中,不属于任何{}块 */
-#define NGX_ANY_CONF         0x1F000000   /* 目前只有include配置项使用,但是无意义 */
+#define NGX_ANY_CONF         0xFF000000   /* 目前只有include配置项使用,但是无意义 */
 
 
 

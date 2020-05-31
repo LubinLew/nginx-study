@@ -151,8 +151,7 @@ struct ngx_connection_s {
     socklen_t           socklen;  /* 客户端的socket地址长度 */
     ngx_str_t           addr_text;/* 客户端的ip(字符串形式) */
 
-    ngx_str_t           proxy_protocol_addr;
-    in_port_t           proxy_protocol_port;
+    ngx_proxy_protocol_t  *proxy_protocol;
 
 #if (NGX_SSL || NGX_COMPAT)
     ngx_ssl_connection_t  *ssl;

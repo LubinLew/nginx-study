@@ -101,11 +101,7 @@ struct ngx_event_s {
      *   accept:     1 if accept many, 0 otherwise
      */
 
-#if (NGX_HAVE_KQUEUE) || (NGX_HAVE_IOCP)
-    int              available;
-#else
-    unsigned         available:1; /* 在epoll事件驱动机制下表示一次尽可能多地建立TCP连接,与 multi_accept 配置项对应 */
-#endif
+    int              available;    /* 在epoll事件驱动机制下表示一次尽可能多地建立TCP连接,与 multi_accept 配置项对应 */
 
     ngx_event_handler_pt  handler; /* 事件发生时的处理方法, 每个事件消费模块都会重新实现它 */
 
